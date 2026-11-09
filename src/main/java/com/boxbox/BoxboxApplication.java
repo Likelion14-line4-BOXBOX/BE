@@ -1,13 +1,13 @@
-package com.boxbox.demo;
+package com.boxbox;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-public class DemoApplication {
+public class BoxboxApplication {
 
 	public static void main(String[] args) {
-		SpringApplication.run(DemoApplication.class, args);
+		SpringApplication.run(BoxboxApplication.class, args);
 	}
 
 }
