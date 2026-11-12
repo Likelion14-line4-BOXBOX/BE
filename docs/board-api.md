@@ -69,6 +69,10 @@ ID는 ERD의 정수 PK를 문자열로 반환한다. 요청의 ID도 이 문자�
 
 `BoardApiTests`는 비회원/회원, 최애 미설정, 정지·탈퇴·삭제 회원, 검증되지 않은 인증 헤더, 세 종류 게시판 필터, 표시 순서, 실제 글 수와 논리 삭제, 빈 목록, 없는 게시판, 태그 범위/활성 상태와 잘못된 요청을 검증한다. `BoardSeedTests`는 초기값 생성·재실행·기존 이름 보존을 검증한다.
 
-H2 결과는 MySQL 엔진 실행·운영 DDL/FK·인증 담당 필터의 검증을 대체하지 않는다. 이 작업 환경의 Docker 엔진이 실행 중이지 않아 실제 MySQL 검증은 수행하지 않았다. 공통 DB와 인증 필터를 연결한 뒤 동일한 조회를 확인해야 한다.
+2026-11-13에는 설치된 MySQL 8.0.45를 사용해 기존 DB와 분리된 `boxbox_verify` 검증 DB를 만들고 현행 ERD의 전체 32개 테이블을 적용했다. Java 21의 실제 Spring 서버를 이 DB에 연결해 정상 조회·분류/팀 필터·빈 목록·잘못된 필터/ID·없는 게시판·검증되지 않은 토큰의 HTTP 요청 12개를 확인했다. 모든 요청의 상태 코드와 응답 값이 예상과 일치했다.
+
+Postman 데스크톱에서도 `GET /api/boards`, `GET /api/boards/1/tags`의 200 OK와 JSON 본문을 직접 확인했다. 검증 글 3개 중 삭제된 1개가 제외돼 `postCount=2`였고, 초기 SQL 재실행 전후 게시판 4개·태그 14개가 유지됐다. 사용한 팀·선수·게시글은 격리 DB의 합성 검증 데이터이며 운영 기준정보가 아니다.
+
+이 결과는 격리 MySQL에서의 실행 검증이다. 실제 공통 DB 반영이나 인증 담당 필터 연결을 완료한 상태는 아니다. 실제 로그인 토큰으로 회원별 응답을 확인하는 작업은 여전히 남아 있다.
 
 Spring Boot의 외부 DB 설정과 서버 Principal 전달 방식은 [공식 DB 문서](https://docs.spring.io/spring-boot/reference/data/sql.html), [Spring MVC 메서드 인자 문서](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-methods/arguments.html)를 참고했다.
