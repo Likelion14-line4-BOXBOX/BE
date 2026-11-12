@@ -1,4 +1,4 @@
-package com.boxbox.board;
+package com.boxbox.radio.board;
 
 import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.is;

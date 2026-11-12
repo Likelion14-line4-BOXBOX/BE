@@ -1,4 +1,4 @@
-package com.boxbox.board.dto;
+package com.boxbox.radio.board.dto;
 
 import java.util.List;
 

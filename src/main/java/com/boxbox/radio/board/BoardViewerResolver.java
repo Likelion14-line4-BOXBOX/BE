@@ -1,4 +1,4 @@
-package com.boxbox.board;
+package com.boxbox.radio.board;
 
 import com.boxbox.common.api.ApiException;
 import jakarta.servlet.http.HttpServletRequest;

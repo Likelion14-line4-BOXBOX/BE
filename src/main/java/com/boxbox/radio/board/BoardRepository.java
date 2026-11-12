@@ -1,4 +1,4 @@
-package com.boxbox.board;
+package com.boxbox.radio.board;
 
 import java.util.List;
 import java.util.Optional;

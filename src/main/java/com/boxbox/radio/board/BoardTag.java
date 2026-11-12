@@ -1,13 +1,12 @@
-package com.boxbox.board;
+package com.boxbox.radio.board;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -15,32 +14,32 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 @Entity
-@Table(name = "boards")
+@Table(name = "board_tags", uniqueConstraints = {
+        @UniqueConstraint(columnNames = {"board_id", "name"})
+})
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class Board {
+public class BoardTag {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true, length = 80)
-    private String code;
+    @Column(name = "board_id", nullable = false)
+    private Long boardId;
 
-    @Enumerated(EnumType.STRING)
-    @JdbcTypeCode(SqlTypes.VARCHAR)
-    @Column(nullable = false, length = 16)
-    private BoardType type;
-
-    @Column(name = "team_id", unique = true)
-    private Long teamId;
-
-    @Column(nullable = false, length = 100)
+    @Column(nullable = false, length = 80)
     private String name;
+
+    @Column(name = "tag_group", nullable = false, length = 16)
+    private String group;
+
+    @Column(name = "driver_id")
+    private Long driverId;
+
+    @Column(name = "is_active", nullable = false)
+    private boolean active;
 
     @JdbcTypeCode(SqlTypes.SMALLINT)
     @Column(name = "display_order", nullable = false)
     private Integer displayOrder;
-
-    @Column(name = "is_active", nullable = false)
-    private boolean active;
 }

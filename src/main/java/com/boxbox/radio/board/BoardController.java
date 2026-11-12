@@ -1,8 +1,8 @@
-package com.boxbox.board;
+package com.boxbox.radio.board;
 
-import com.boxbox.board.dto.BoardResponse;
-import com.boxbox.board.dto.BoardTagResponse;
-import com.boxbox.board.dto.ItemsResponse;
+import com.boxbox.radio.board.dto.BoardResponse;
+import com.boxbox.radio.board.dto.BoardTagResponse;
+import com.boxbox.radio.board.dto.ItemsResponse;
 import com.boxbox.common.api.ApiResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
