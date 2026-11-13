@@ -1,6 +1,6 @@
 # 게시글 작성·상세·수정·삭제 (#10)
 
-[이슈 #10](https://github.com/Likelion14-line4-BOXBOX/BE/issues/10)의 TR04~TR07을 `com.boxbox.radio.board.post`에 구현했다.
+[이슈 #10](https://github.com/Likelion14-line4-BOXBOX/BE/issues/10)의 TR04~TR07을 `com.boxbox.radio.post`에 구현했다.
 
 | API | 성공 응답 |
 | --- | --- |
