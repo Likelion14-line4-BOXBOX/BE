@@ -192,8 +192,8 @@ class MyPostsApiTests {
             params.put("cursor", result.nextCursor());
         }
         assertThat(actual).containsExactly("8", "7", "5", "1");
-        // 합성한 미래(상한+1μs) 행은 OS 시계가 다음 tick으로 넘어갈 때까지 새 조회에서도 제외될 수 있다.
-        assertThat(ids(service.list("viewer", Map.of("filter", "LIKED")))).startsWith("2");
+        // 합성한 미래(상한+1μs) 행의 노출/상대 순위는 시계 tick에 따라 달라진다. 실제 등록의 재조회 노출을 확인한다.
+        assertThat(ids(service.list("viewer", Map.of("filter", "LIKED")))).contains("2");
     }
 
     @Test
