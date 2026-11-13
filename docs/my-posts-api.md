@@ -49,18 +49,18 @@ MG04의 URL·요청·응답 필드는 기존 명세대로이며 Notion과 루트
 .\gradlew.bat cleanTest test bootJar --offline --console=plain
 ```
 
-내 활동 전용 MySQL 테스트는 `127.0.0.1:13306/boxbox_my_posts_verify`에 전체 ERD 32개 테이블을 준비한 후 선택 실행한다. 관련 데이터를 초기화하므로 공통 DB에서 실행하지 않는다. MY_POSTS_MYSQL_USER/MY_POSTS_MYSQL_PASSWORD를 지원한다. 기존 요약 조회 추출의 MySQL 회귀 검증에는 별도 boxbox_search_verify DB의 기존 검색 테스트를 함께 실행한다.
+내 활동 전용 MySQL 테스트는 `127.0.0.1:13306/boxbox_my_posts_verify`에 전체 ERD 32개 테이블을 준비한 후 선택 실행한다. 관련 데이터를 초기화하므로 공통 DB에서 실행하지 않는다. MY_POSTS_MYSQL_USER/MY_POSTS_MYSQL_PASSWORD를 지원한다. 같은 선택 플래그로 MyPostsSearchMySqlTests가 기존 검색 63개도 이 새 전용 DB에서 실행한다. 기존 boxbox_search_verify 등 다른 검증 DB는 변경하지 않는다.
 
 ```powershell
 $env:RUN_MY_POSTS_MYSQL_TESTS = 'true'
-$env:RUN_POST_SEARCH_MYSQL_TESTS = 'true'
 .\gradlew.bat cleanTest test bootJar --offline --console=plain
 Remove-Item Env:RUN_MY_POSTS_MYSQL_TESTS
-Remove-Item Env:RUN_POST_SEARCH_MYSQL_TESTS
 ```
 
 2026-11-13 실제 실행: H2 내 활동 51개+기존 H2 회귀 330개=381개, 실패·오류 0개. bootJar와 diff 검사도 통과했다. 본인 범위/계정 상태/세 필터/동률/빈 결과/잘못된 요청/커서 재사용·변조/새 글·반응 상한/삭제 경계/취소·재등록/코드 포인트/첨부 URL/조회 시 DB 불변과 기존 검색 응답을 검증했다.
 
-격리 MySQL DB 준비 명령은 자동 승인 검토가 두 번 모두 기한 내 끝나지 않아 실행되지 않았다. 명시적 승인을 요청한 상태이며 MySQL 테스트와 실제 서버 HTTP 검증은 아직 실행하지 않았다. 준비 스크립트는 로컬 build/verification/issue-18-mysql-setup.ps1, HTTP 검증 스크립트는 build/verification/issue-18-http.ps1에 있다. 기존 검증 DB와 공통 DB는 이번 턴에 변경하지 않았다.
+2026-11-14 후속 검증: 사용자 명시적 승인 후 기존 격리 MySQL 8.0.45·13306·data 경로를 확인하고 새 boxbox_my_posts_verify에 전체 ERD 32개 테이블을 준비했다. **H2 내 활동 51개+기존 H2 330개+MySQL 내 활동 51개+MySQL 검색 회귀 63개=495개, 실패·오류 0개**를 확인했고 bootJar도 성공했다. 기존 MySQL 선택 클래스는 실행하지 않았다(XML 파라미터 확장 전 메서드 기준 skipped=115). 기존 검증 DB와 공통 DB는 변경하지 않았다.
 
-정상 회원 요청은 서버 Principal을 주입한 H2 MockMvc·서비스 테스트로 확인한 것이며 실제 로그인 토큰 HTTP 성공 조회·공통 DB·FE 연결은 미검증이다. 검증용 런타임 인증 경로는 추가하지 않았다. MySQL·HTTP가 확인되면 실제 결과를 추가하고 PR 초안의 검증 상태도 갱신해야 한다.
+같은 JAR·새 전용 DB·임의 포트 실제 서버에서 HTTP 21개와 DB 값 대조도 통과했다. MG04 세 필터의 미인증·위조 헤더·미검증 Bearer 거절, 기존 공개 상세/목록/아카이브/빈 목록·400/404와 공유 요약 필드를 확인했다. 최초 상세 조회 후 목록·거절 요청 전후 글·댓글·반응·조회수·dedup은 불변이었다. Postman UI는 조작하지 않았다. 확인한 임시 서버 PID 40008만 종료했다.
+
+정상 회원 MG04의 200 응답·필터·페이지·400/401·개인화는 서버 Principal을 주입한 H2/MySQL MockMvc·서비스 테스트로 검증했다. 실제 로그인 토큰 HTTP 성공 조회·공통 DB·FE·CM09 실제 저장소 연결은 미검증이며 검증용 런타임 인증 경로는 추가하지 않았다.
