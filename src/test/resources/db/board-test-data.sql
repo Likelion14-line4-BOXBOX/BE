@@ -8,12 +8,12 @@ DELETE FROM teams;
 INSERT INTO teams (id, code, name, display_order) VALUES
     (1, 'TEAM_A', '팀 A', 2), (2, 'TEAM_B', '팀 B', 1), (3, 'TEAM_C', '팀 C', 3);
 INSERT INTO drivers (id, name, team_id) VALUES (11, '선수 A', 1), (12, '선수 B', 1);
-INSERT INTO users (id, login_id, favorite_team_id, status, deleted_at) VALUES
-    (1, 'viewer', 1, 'ACTIVE', NULL),
-    (2, 'no_favorite', NULL, 'ACTIVE', NULL),
-    (3, 'suspended', 1, 'SUSPENDED', NULL),
-    (4, 'deleted', 1, 'ACTIVE', CURRENT_TIMESTAMP),
-    (5, 'withdrawn', 1, 'WITHDRAWN', NULL);
+INSERT INTO users (id, login_id, nickname, favorite_team_id, status, deleted_at) VALUES
+    (1, 'viewer', '조회회원', 1, 'ACTIVE', NULL),
+    (2, 'no_favorite', '최애없음', NULL, 'ACTIVE', NULL),
+    (3, 'suspended', '정지회원', 1, 'SUSPENDED', NULL),
+    (4, 'deleted', '삭제회원', 1, 'ACTIVE', CURRENT_TIMESTAMP),
+    (5, 'withdrawn', '탈퇴회원', 1, 'WITHDRAWN', NULL);
 INSERT INTO boards (id, code, type, team_id, name, display_order, is_active) VALUES
     (10, 'TEAM_A', 'TEAM', 1, '팀 A 게시판', 2, TRUE),
     (20, 'TEAM_B', 'TEAM', 2, '팀 B 게시판', 1, TRUE),
