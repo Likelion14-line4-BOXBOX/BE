@@ -3,6 +3,7 @@ package com.boxbox.radio.reaction;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -63,6 +64,9 @@ class ReactionRepository {
     }
 
     private long count(String sql, Object... args) { return jdbc.queryForObject(sql, Long.class, args); }
-    private static LocalDateTime utcNow() { return LocalDateTime.ofInstant(Instant.now(), ZoneOffset.UTC); }
+    private static LocalDateTime utcNow() {
+        // DATETIME(6) 반올림으로 즉시 조회의 시각 상한을 넘어가지 않도록 정규화한다.
+        return LocalDateTime.ofInstant(Instant.now().truncatedTo(ChronoUnit.MICROS), ZoneOffset.UTC);
+    }
     record Viewer(long id, String status) { }
 }
