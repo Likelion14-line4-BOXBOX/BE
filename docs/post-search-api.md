@@ -1,6 +1,6 @@
 # 게시글 목록·검색·아카이브 (#12)
 
-[이슈 #12](https://github.com/Likelion14-line4-BOXBOX/BE/issues/12)의 TR03과 TR22를 기존 `com.boxbox.radio.board.post`에 구현했다. 기존 CRUD·DB 스키마·API 명세의 경로와 요청/응답 필드는 변경하지 않았다.
+[이슈 #12](https://github.com/Likelion14-line4-BOXBOX/BE/issues/12)의 TR03과 TR22를 기존 `com.boxbox.radio.post`에 구현했다. 기존 CRUD·DB 스키마·API 명세의 경로와 요청/응답 필드는 변경하지 않았다.
 
 | API | 응답 |
 | --- | --- |

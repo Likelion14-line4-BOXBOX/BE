@@ -1,6 +1,6 @@
 # 게시글·댓글 좋아요와 스크랩 (#16)
 
-[이슈 #16](https://github.com/Likelion14-line4-BOXBOX/BE/issues/16)의 TR12~TR15, TR23~TR24를 `com.boxbox.radio.board.reaction`에 구현했다. 선행 검색·댓글 PR이 병합된 dev `d7786e3`에서 분기한 `feat/#16-reactions`이며 PR 대상은 dev다.
+[이슈 #16](https://github.com/Likelion14-line4-BOXBOX/BE/issues/16)의 TR12~TR15, TR23~TR24를 `com.boxbox.radio.reaction`에 구현했다. 선행 검색·댓글 PR이 병합된 dev `d7786e3`에서 분기한 `feat/#16-reactions`이며 PR 대상은 dev다.
 
 | API | 성공 응답 |
 | --- | --- |

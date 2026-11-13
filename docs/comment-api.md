@@ -1,6 +1,6 @@
 # 댓글·대댓글 (#14)
 
-[이슈 #14](https://github.com/Likelion14-line4-BOXBOX/BE/issues/14)의 TR08~TR11을 `com.boxbox.radio.board.comment`에 구현했다. 기존 게시글·공통 응답·Principal 규약과 DB 테이블을 재사용하며 API 명세의 경로·요청/응답 필드는 변경하지 않았다.
+[이슈 #14](https://github.com/Likelion14-line4-BOXBOX/BE/issues/14)의 TR08~TR11을 `com.boxbox.radio.comment`에 구현했다. 기존 게시글·공통 응답·Principal 규약과 DB 테이블을 재사용하며 API 명세의 경로·요청/응답 필드는 변경하지 않았다.
 
 | API | 성공 응답 |
 | --- | --- |
