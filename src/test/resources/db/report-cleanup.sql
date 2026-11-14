@@ -1,0 +1,20 @@
+-- 신고 전용 DB에서만 실행한다. 다른 검증 DB나 공통 DB에서 실행하지 않는다.
+DELETE FROM reports;
+DELETE FROM stream_events;
+DELETE FROM chat_messages;
+DELETE FROM chat_participants;
+DELETE FROM chat_rooms;
+DELETE FROM race_sessions;
+DELETE FROM races;
+DELETE FROM comment_likes;
+DELETE FROM post_view_dedup;
+DELETE FROM post_reactions;
+DELETE FROM comments WHERE parent_id IS NOT NULL;
+DELETE FROM comments;
+DELETE FROM media_files;
+DELETE FROM posts;
+DELETE FROM board_tags;
+DELETE FROM boards;
+DELETE FROM users;
+DELETE FROM drivers;
+DELETE FROM teams;
