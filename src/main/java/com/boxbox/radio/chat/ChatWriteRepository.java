@@ -58,6 +58,24 @@ class ChatWriteRepository {
         }
     }
 
+    void recordJoin(long roomId, long userId, Instant now) {
+        // 회원→방 잠금 아래에서 재연결/중복 탭을 직렬화한다. 메시지 작성은 지급 조건이 아니다.
+        boolean exists = !jdbc.queryForList("SELECT user_id FROM chat_participants WHERE room_id=? AND user_id=?", Long.class, roomId, userId).isEmpty();
+        if (exists) {
+            jdbc.update("""
+                    UPDATE chat_participants SET last_joined_at=GREATEST(last_joined_at,?),
+                        stamp_trigger_type=CASE WHEN stamp_recorded_at IS NULL THEN 'JOIN' ELSE stamp_trigger_type END,
+                        stamp_recorded_at=COALESCE(stamp_recorded_at,?)
+                    WHERE room_id=? AND user_id=?
+                    """, ChatRepository.utc(now), ChatRepository.utc(now), roomId, userId);
+        } else {
+            jdbc.update("""
+                    INSERT INTO chat_participants(room_id,user_id,first_joined_at,last_joined_at,stamp_recorded_at,stamp_trigger_type)
+                    VALUES (?,?,?,?,?,'JOIN')
+                    """, roomId, userId, ChatRepository.utc(now), ChatRepository.utc(now), ChatRepository.utc(now));
+        }
+    }
+
     StoredMessage insert(long roomId, long senderId, ChatMessageInput input, Instant now) {
         var key = new GeneratedKeyHolder();
         jdbc.update(connection -> {

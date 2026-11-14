@@ -43,8 +43,9 @@ class ChatStreamConnectionTests {
         try {
             var a = new RecordingEmitter();
             hub.start(1, null, new ChatStreamService.Open(0, null), "session", a);
-            assertThatThrownBy(() -> hub.start(1, null, new ChatStreamService.Open(0, null), "other", new RecordingEmitter()))
+            assertThatThrownBy(() -> hub.start(1, "viewer", new ChatStreamService.Open(0, "user:1"), null, new RecordingEmitter()))
                     .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.getCode()).isEqualTo("CHAT_STREAM_BUSY"));
+            verify(service, never()).participate(anyLong(), nullable(String.class));
             assertThat(count()).isEqualTo(1);
             a.completion.run();
             var b = new RecordingEmitter();

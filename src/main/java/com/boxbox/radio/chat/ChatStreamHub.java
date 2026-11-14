@@ -103,6 +103,7 @@ class ChatStreamHub {
             long lastHeartbeat = started;
             long online = -1;
             boolean ready = false;
+            boolean participated = false;
             try {
                 if (closed.get()) return;
                 emitter.send(SseEmitter.event().comment("connected").reconnectTime(3000));
@@ -123,6 +124,11 @@ class ChatStreamHub {
                                 Map.of("roomId", Long.toString(roomId)));
                         emitter.send(SseEmitter.event().id(checkpoint.eventId()).name("STREAM_READY").data(checkpoint, MediaType.APPLICATION_JSON));
                         ready = true;
+                    }
+                    if (!participated && loginId != null && batch.status() == ChatRoomState.LIVE && !closed.get()) {
+                        // STREAM_READY 전송 실패·만료 커서·비회원은 지급하지 않는다.
+                        // 대기 중 들어온 연결도 LIVE 전환 뒤 참여하며 메시지는 요구하지 않는다.
+                        participated = service.participate(roomId, loginId);
                     }
                     for (var event : batch.events()) {
                         if (closed.get()) break;
