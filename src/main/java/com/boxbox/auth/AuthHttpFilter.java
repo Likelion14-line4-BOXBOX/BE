@@ -18,6 +18,7 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.web.util.UrlPathHelper;
 import tools.jackson.databind.json.JsonMapper;
 
 @Component
@@ -35,7 +36,7 @@ class AuthHttpFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain) throws ServletException, IOException {
         try {
-            String path = request.getRequestURI().substring(request.getContextPath().length());
+            String path = UrlPathHelper.defaultInstance.getPathWithinApplication(request);
             if (path.startsWith("/api/auth/")) response.setHeader("Cache-Control", "no-store");
             String origin = request.getHeader("Origin");
             if (origin != null) {

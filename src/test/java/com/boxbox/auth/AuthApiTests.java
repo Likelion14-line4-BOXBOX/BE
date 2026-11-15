@@ -247,6 +247,10 @@ class AuthApiTests {
                 .cookie(new Cookie("refreshToken", "a".repeat(43)), new Cookie("refreshToken", "b".repeat(43))))
                 .andExpect(status().isUnauthorized());
     }
+    @Test void matrixPathParametersCannotSkipCookieOriginValidation() throws Exception {
+        mvc.perform(post("/api/auth/refresh;client=web").cookie(new Cookie("refreshToken", "a".repeat(43))))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.error.code").value("CSRF_VALIDATION_FAILED"));
+    }
     @Test void concurrentRefreshProducesOneReplacementThenRevokesReusedFamily() throws Exception {
         signup("concurrent", "1234abcd", "동시회원", 201);
         String raw = refreshCookie(login("concurrent", "1234abcd", 200)).getValue();

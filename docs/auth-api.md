@@ -51,6 +51,6 @@ $env:RUN_STAMP_MYSQL_TESTS = 'true'
 
 선택형 MySQL 테스트는127.0.0.1:13306의 전용 `boxbox_auth_verify`, `boxbox_stamp_verify`를 사용한다. 기존 ERD를 미리 적용하고 공통 DB에서 실행하지 않는다. `AUTH_MYSQL_USER/PASSWORD`, `STAMP_MYSQL_USER/PASSWORD`로 전용 연결 자격 증명을 설정할 수 있다.
 
-2026-11-15 검증: H2·격리 MySQL과 기존 회귀838개 통과, 실패/오류0. 다른 기능의 선택형 MySQL334개는 실행하지 않았다. 별도 `boxbox_auth_http_verify_v2`·MySQL8.0.45·전체ERD32개·같은 JAR에서 실제 HTTP/SSE57요청·89항목을 검증했다. 가입/중복/해시·잔액/원장 대조, 실토큰 프로필 조회·수정, 변조/만료/필수 클레임 누락, refresh 회전/재사용/다른 계열 보존/로그아웃, CORS/CSRF/요청 제한, 공개 필터·빈 목록·오류, LIVE 참여 도장·SCHEDULED 만료 무지급을 확인했다.
+2026-11-16 최종 검증: H2·격리 MySQL과 기존 회귀840개 통과, 실패/오류0. 다른 기능의 선택형 MySQL334개는 실행하지 않았다. 별도 `boxbox_auth_http_verify_v3`·MySQL8.0.45·전체ERD32개·같은 JAR에서 실제 HTTP/SSE58요청·90항목을 검증했다. 가입/중복/해시·잔액/원장 대조, 실토큰 프로필 조회·수정, 변조/만료/필수 클레임 누락, refresh 회전/재사용/다른 계열 보존/로그아웃, 경로 매개변수를 포함한 CORS/CSRF/요청 제한, 공개 필터·빈 목록·오류, LIVE 참여 도장·SCHEDULED 만료 무지급을 확인했다.
 
 공통 DB·실제 FE는 미검증이다. #30 MG03의 마켓 provider 미연결은 별도 후속 범위이며 이 인증 기능에 포함하지 않는다.
