@@ -42,6 +42,11 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @ActiveProfiles("test")
 @Sql({"/db/chat-test-data.sql", "/db/chat-write-test-data.sql"})
 class ChatStampApiTests {
+    @Test void expiredCredentialsCannotGrantJoinStamp() {
+        assertThatThrownBy(() -> stream.participate(1, "newcomer", () -> false))
+                .isInstanceOfSatisfying(ApiException.class, error -> assertThat(error.getCode()).isEqualTo("UNAUTHORIZED"));
+        assertThat(stampCount()).isZero();
+    }
     @Autowired protected ChatStreamHub hub;
     @Autowired protected ChatStreamService stream;
     @Autowired protected ChatMessageService messages;
