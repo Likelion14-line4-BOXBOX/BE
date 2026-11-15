@@ -10,6 +10,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BooleanSupplier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.json.JsonParserFactory;
 import org.springframework.http.HttpStatus;
@@ -52,12 +53,17 @@ class ChatStreamService {
 
     /** LIVE 연결이 준비된 뒤에만 호출한다. 목록/이력 조회나 메시지 전송은 이 경로를 호출하지 않는다. */
     boolean participate(long roomId, String loginId) {
+        return participate(roomId, loginId, () -> true);
+    }
+
+    boolean participate(long roomId, String loginId, BooleanSupplier credentialsValid) {
         if (loginId == null) return false;
         if (loginId.isBlank()) throw ApiException.unauthorized();
         long userId = jdbc.query("""
                 SELECT id FROM users WHERE login_id=? AND deleted_at IS NULL AND status IN ('ACTIVE','SUSPENDED') FOR UPDATE
                 """, (rs, row) -> rs.getLong("id"), loginId).stream().findFirst().orElseThrow(ApiException::unauthorized);
         var room = writes.lockRoom(roomId);
+        if (!credentialsValid.getAsBoolean()) throw ApiException.unauthorized();
         Instant now = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MICROS);
         // 연결 준비/잠금 대기 사이에 종료됐다면 뒤늦게 지급하지 않는다.
         if (ChatRoomState.at(room.status(), room.opensAt(), room.closesAt(), now) != ChatRoomState.LIVE) return false;

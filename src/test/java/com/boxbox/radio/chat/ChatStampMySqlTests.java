@@ -18,6 +18,28 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 @EnabledIfEnvironmentVariable(named = "RUN_STAMP_MYSQL_TESTS", matches = "true")
 class ChatStampMySqlTests extends ChatStampApiTests {
+    @Test void credentialsExpiringDuringMemberLockWaitCannotGrantStamp() throws Exception {
+        var valid = new java.util.concurrent.atomic.AtomicBoolean(true);
+        var locked = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        try (var pool = Executors.newVirtualThreadPerTaskExecutor()) {
+            var writer = pool.submit(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
+                jdbc.queryForObject("SELECT id FROM users WHERE id=6 FOR UPDATE", Long.class);
+                locked.countDown();
+                try { if (!release.await(5, TimeUnit.SECONDS)) throw new IllegalStateException("lock timeout"); }
+                catch (InterruptedException error) { throw new IllegalStateException(error); }
+            }));
+            assertThat(locked.await(5, TimeUnit.SECONDS)).isTrue();
+            var join = pool.submit(() -> stream.participate(1, "newcomer", valid::get));
+            try {
+                assertThatThrownBy(() -> join.get(100, TimeUnit.MILLISECONDS)).isInstanceOf(java.util.concurrent.TimeoutException.class);
+                valid.set(false);
+            } finally { release.countDown(); }
+            writer.get(5, TimeUnit.SECONDS);
+            assertThatThrownBy(() -> join.get(5, TimeUnit.SECONDS)).hasCauseInstanceOf(ApiException.class);
+        } finally { release.countDown(); }
+        assertThat(stampCount()).isZero();
+    }
     @DynamicPropertySource
     static void mysqlProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", () -> "jdbc:mysql://127.0.0.1:13306/boxbox_stamp_verify?connectionTimeZone=UTC&characterEncoding=UTF-8");
