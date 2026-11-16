@@ -1,5 +1,7 @@
 package com.boxbox.market.round;
 
+import com.boxbox.common.api.ApiException;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -11,6 +13,9 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+import tools.jackson.databind.json.JsonMapper;
 
 class MarketRoundRepositoryTest {
     private MarketRoundRepository repository;
@@ -29,7 +34,8 @@ class MarketRoundRepositoryTest {
         jdbc.execute("""
                 CREATE TABLE market_rounds (id BIGINT PRIMARY KEY, race_id BIGINT, season_year INT,
                     status VARCHAR(24), open_at DATETIME(6), close_at DATETIME(6), publish_at DATETIME(6),
-                    ranking_published_at DATETIME(6), rule_version VARCHAR(40), status_version BIGINT)
+                    ranking_published_at DATETIME(6), rule_version VARCHAR(40), status_version BIGINT,
+                    rule_snapshot VARCHAR(1000), settlement_status VARCHAR(24))
                 """);
         jdbc.execute("CREATE TABLE chat_rooms (id BIGINT PRIMARY KEY, race_id BIGINT)");
     }
@@ -62,10 +68,27 @@ class MarketRoundRepositoryTest {
         assertTrue(repository.current(2026, Instant.parse("2026-11-16T00:00:00Z")).isEmpty());
     }
 
+    @Test
+    void returnsRequestedRoundWithStoredRuleAndSettlementStatus() {
+        addRound(1, 2025, "SETTLED", "2025-11-16 00:00:00", "2025-11-17 00:00:00");
+        jdbc.update("UPDATE market_rounds SET rule_snapshot = ?, settlement_status = ? WHERE id = 1",
+                "{\"tradeImpactRate\":0.02}", "COMPLETED");
+        var service = new MarketRoundService(repository, JsonMapper.builder().build(), 2026);
+
+        var detail = service.detail("1");
+
+        assertEquals("1", detail.roundId());
+        assertEquals("SETTLED", detail.status());
+        assertEquals(new BigDecimal("0.02"), detail.tradeImpactRate());
+        assertEquals("STARTING_PRICE", detail.settlementBase());
+        assertEquals("COMPLETED", detail.settlementStatus());
+        assertEquals("ROUND_NOT_FOUND", assertThrows(ApiException.class, () -> service.detail("2")).getCode());
+    }
+
     private void addRound(int id, int season, String status, String openAt, String closeAt) {
         jdbc.update("INSERT INTO races VALUES (?, ?, ?, ?, 'SCHEDULED')", id, season, id, "Grand Prix " + id);
         jdbc.update("""
-                INSERT INTO market_rounds VALUES (?, ?, ?, ?, ?, ?, '2026-11-24 00:00:00', NULL, 'rule-1', 1)
+                INSERT INTO market_rounds VALUES (?, ?, ?, ?, ?, ?, '2026-11-24 00:00:00', NULL, 'rule-1', 1, '{}', 'NOT_STARTED')
                 """, id, id, season, status, openAt, closeAt);
     }
 }
