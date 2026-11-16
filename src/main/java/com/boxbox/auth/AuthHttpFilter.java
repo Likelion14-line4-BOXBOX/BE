@@ -26,7 +26,7 @@ import tools.jackson.databind.json.JsonMapper;
 @RequiredArgsConstructor
 class AuthHttpFilter extends OncePerRequestFilter {
     private static final Set<String> METHODS = Set.of("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS");
-    private static final Set<String> HEADERS = Set.of("authorization", "content-type", "last-event-id", "accept");
+    private static final Set<String> HEADERS = Set.of("authorization", "content-type", "last-event-id", "accept", "idempotency-key");
     private final AuthSettings settings;
     private final AuthService service;
     private final JsonMapper json;
@@ -51,7 +51,7 @@ class AuthHttpFilter extends OncePerRequestFilter {
                 String headers = request.getHeader("Access-Control-Request-Headers");
                 if (headers != null) for (String header : headers.split(",")) if (!HEADERS.contains(header.trim().toLowerCase(Locale.ROOT))) throw csrf();
                 response.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS");
-                response.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, Last-Event-ID, Accept");
+                response.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, Last-Event-ID, Accept, Idempotency-Key");
                 response.addHeader("Vary", "Access-Control-Request-Method");
                 response.addHeader("Vary", "Access-Control-Request-Headers");
                 response.setStatus(204);
