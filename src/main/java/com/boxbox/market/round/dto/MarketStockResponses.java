@@ -27,4 +27,9 @@ public final class MarketStockResponses {
 
     public record SettlementScenario(Integer finishRank, int positionScore, int resultBonus, int finalScore,
                                      BigInteger settlementPrice) { }
+
+    public record Prices(List<Candle> items, String nextCursor, boolean hasNext) { }
+
+    public record Candle(Instant timestamp, BigInteger open, BigInteger high, BigInteger low,
+                         BigInteger close, BigInteger volume) { }
 }

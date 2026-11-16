@@ -104,7 +104,7 @@ class MarketStockService {
                 "라운드 정산 규칙을 읽을 수 없습니다.");
     }
 
-    private static BigInteger stockLookupId(String value) {
+    static BigInteger stockLookupId(String value) {
         if (!value.matches("[1-9][0-9]{0,19}")) {
             throw stockNotFound();
         }
@@ -115,11 +115,11 @@ class MarketStockService {
         return id;
     }
 
-    private static ApiException stockNotFound() {
+    static ApiException stockNotFound() {
         return new ApiException(HttpStatus.NOT_FOUND, "STOCK_NOT_FOUND", "마켓 종목을 찾을 수 없습니다.");
     }
 
-    private static boolean isPublished(MarketRoundRepository.RoundRow round, Instant now) {
+    static boolean isPublished(MarketRoundRepository.RoundRow round, Instant now) {
         return round.openAt() != null && !now.isBefore(round.openAt()) && !"SCHEDULED".equals(round.status());
     }
 
@@ -160,7 +160,7 @@ class MarketStockService {
         }
     }
 
-    private static int parseSize(String size) {
+    static int parseSize(String size) {
         if (!size.matches("[1-9][0-9]?|100")) {
             throw ApiException.invalidRequest("size는 1부터 100까지 입력해 주세요.");
         }

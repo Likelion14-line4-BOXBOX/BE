@@ -4,6 +4,7 @@ import com.boxbox.common.api.ApiException;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -43,22 +44,7 @@ class MarketRoundRepositoryTest {
 
     @Test
     void listsStocksUsingFrozenTeamAndKeepsEqualPricesAcrossPages() {
-        addRound(1, 2026, "OPEN", "2026-11-16 00:00:00", "2026-11-17 00:00:00");
-        jdbc.execute("CREATE TABLE drivers (id BIGINT PRIMARY KEY, name VARCHAR(120), car_number INT)");
-        jdbc.execute("CREATE TABLE teams (id BIGINT PRIMARY KEY, name VARCHAR(120))");
-        jdbc.execute("""
-                CREATE TABLE market_stocks (id BIGINT PRIMARY KEY, round_id BIGINT, season_year INT,
-                    driver_id BIGINT, team_id BIGINT, base_rank INT, starting_price BIGINT, current_price BIGINT,
-                    price_version BIGINT, updated_at DATETIME(6), total_buy_quantity BIGINT)
-                """);
-        jdbc.update("INSERT INTO drivers VALUES (1, 'Driver A', 44), (2, 'Driver B', 63), (3, 'Driver C', 4)");
-        jdbc.update("INSERT INTO teams VALUES (10, 'Team A'), (20, 'Team B')");
-        jdbc.update("""
-                INSERT INTO market_stocks VALUES
-                    (1, 1, 2026, 1, 10, 2, 100, 120, 1, '2026-11-16 00:00:00', 5),
-                    (2, 1, 2026, 2, 10, 1, 150, 120, 1, '2026-11-16 00:00:00', 0),
-                    (3, 1, 2026, 3, 20, 3, 100, 150, 1, '2026-11-16 00:00:00', 0)
-                """);
+        addStockFixtures();
         var service = new MarketStockService(repository,
                 new MarketStockRepository(new NamedParameterJdbcTemplate(jdbc)), JsonMapper.builder().build());
         var start = Instant.parse("2026-11-16T00:00:00Z");
@@ -158,6 +144,63 @@ class MarketRoundRepositoryTest {
         assertEquals("STARTING_PRICE", detail.settlementBase());
         assertEquals("COMPLETED", detail.settlementStatus());
         assertEquals("ROUND_NOT_FOUND", assertThrows(ApiException.class, () -> service.detail("2")).getCode());
+    }
+
+    @Test
+    void chartsStoredCandlesAndCarriesPricesAcrossEmptyBucketsAndPages() {
+        addStockFixtures();
+        jdbc.execute("""
+                CREATE TABLE stock_price_candles (stock_id BIGINT, interval_seconds INT, bucket_at DATETIME(6),
+                    open_price BIGINT, high_price BIGINT, low_price BIGINT, close_price BIGINT, volume BIGINT,
+                    PRIMARY KEY (interval_seconds, bucket_at, stock_id))
+                """);
+        jdbc.update("""
+                INSERT INTO stock_price_candles VALUES
+                    (1, 60, '2026-11-16 00:01:00', 100, 120, 95, 110, 7),
+                    (1, 300, '2026-11-16 00:00:00', 100, 140, 95, 130, 20),
+                    (2, 60, '2026-11-16 00:02:00', 150, 150, 150, 150, 4)
+                """);
+        var namedJdbc = new NamedParameterJdbcTemplate(jdbc);
+        var service = new MarketPriceService(repository, new MarketStockRepository(namedJdbc),
+                new MarketPriceRepository(namedJdbc));
+        var now = Instant.parse("2026-11-16T00:04:00Z");
+        var first = service.prices("1", "1", "1m", null, null, null, "2", now);
+        assertEquals(100, first.items().getFirst().close().intValueExact());
+        assertEquals(0, first.items().getFirst().volume().intValueExact());
+        assertEquals(120, first.items().getLast().high().intValueExact());
+        assertEquals(7, first.items().getLast().volume().intValueExact());
+        assertTrue(first.hasNext());
+
+        var second = service.prices("1", "1", "1m", null, null, first.nextCursor(), "2", now);
+        assertEquals(Instant.parse("2026-11-16T00:02:00Z"), second.items().getFirst().timestamp());
+        assertEquals(110, second.items().getFirst().close().intValueExact());
+        assertEquals(0, second.items().getFirst().volume().intValueExact());
+        assertFalse(second.hasNext());
+        assertNull(second.nextCursor());
+
+        assertEquals("INVALID_REQUEST", assertThrows(ApiException.class,
+                () -> service.prices("1", "1", "5m", null, null, first.nextCursor(), "2", now)).getCode());
+        assertEquals("STOCK_NOT_FOUND", assertThrows(ApiException.class,
+                () -> service.prices("1", "99", "1m", null, null, null, "2", now)).getCode());
+    }
+
+    private void addStockFixtures() {
+        addRound(1, 2026, "OPEN", "2026-11-16 00:00:00", "2026-11-17 00:00:00");
+        jdbc.execute("CREATE TABLE drivers (id BIGINT PRIMARY KEY, name VARCHAR(120), car_number INT)");
+        jdbc.execute("CREATE TABLE teams (id BIGINT PRIMARY KEY, name VARCHAR(120))");
+        jdbc.execute("""
+                CREATE TABLE market_stocks (id BIGINT PRIMARY KEY, round_id BIGINT, season_year INT,
+                    driver_id BIGINT, team_id BIGINT, base_rank INT, starting_price BIGINT, current_price BIGINT,
+                    price_version BIGINT, updated_at DATETIME(6), total_buy_quantity BIGINT)
+                """);
+        jdbc.update("INSERT INTO drivers VALUES (1, 'Driver A', 44), (2, 'Driver B', 63), (3, 'Driver C', 4)");
+        jdbc.update("INSERT INTO teams VALUES (10, 'Team A'), (20, 'Team B')");
+        jdbc.update("""
+                INSERT INTO market_stocks VALUES
+                    (1, 1, 2026, 1, 10, 2, 100, 120, 1, '2026-11-16 00:00:00', 5),
+                    (2, 1, 2026, 2, 10, 1, 150, 120, 1, '2026-11-16 00:00:00', 0),
+                    (3, 1, 2026, 3, 20, 3, 100, 150, 1, '2026-11-16 00:00:00', 0)
+                """);
     }
 
     private void addRound(int id, int season, String status, String openAt, String closeAt) {
