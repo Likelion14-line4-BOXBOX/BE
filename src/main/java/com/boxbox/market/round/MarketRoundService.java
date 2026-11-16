@@ -26,7 +26,7 @@ public class MarketRoundService {
         this.activeSeason = activeSeason;
     }
 
-    MarketRoundResponses.Current current(Instant now) {
+    public MarketRoundResponses.Current current(Instant now) {
         var round = repository.current(activeSeason, now)
                 .map(MarketRoundService::toRound)
                 .orElse(null);
