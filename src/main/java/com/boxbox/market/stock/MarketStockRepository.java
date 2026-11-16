@@ -1,4 +1,4 @@
-package com.boxbox.market.round;
+package com.boxbox.market.stock;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -14,7 +14,7 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 @RequiredArgsConstructor
-class MarketStockRepository {
+public class MarketStockRepository {
     private final NamedParameterJdbcTemplate jdbc;
 
     List<StockRow> findByRound(BigInteger roundId, int season, BigDecimal teamId) {

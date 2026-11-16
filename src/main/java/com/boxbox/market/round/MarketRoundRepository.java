@@ -15,7 +15,7 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 @RequiredArgsConstructor
-class MarketRoundRepository {
+public class MarketRoundRepository {
     private static final String ROUND_COLUMNS = """
                 m.id, m.race_id, m.season_year, r.round_number, r.name AS race_name,
                 m.status, m.open_at, m.close_at, m.publish_at, m.ranking_published_at,
@@ -47,7 +47,7 @@ class MarketRoundRepository {
                 .stream().findFirst();
     }
 
-    Optional<DetailRow> findById(BigInteger roundId) {
+    public Optional<DetailRow> findById(BigInteger roundId) {
         return jdbc.query("SELECT " + ROUND_COLUMNS + ", m.rule_snapshot, m.settlement_status " + ROUND_TABLES
                         + "WHERE m.id = :roundId",
                 Map.of("roundId", new BigDecimal(roundId)),
@@ -70,9 +70,9 @@ class MarketRoundRepository {
         return date == null ? null : date.toInstant(ZoneOffset.UTC);
     }
 
-    record DetailRow(RoundRow round, String ruleSnapshot, String settlementStatus) { }
+    public record DetailRow(RoundRow round, String ruleSnapshot, String settlementStatus) { }
 
-    record RoundRow(String id, String raceId, int season, int roundNumber, String raceName, String status,
+    public record RoundRow(String id, String raceId, int season, int roundNumber, String raceName, String status,
                     Instant openAt, Instant closeAt, Instant publishAt, Instant rankingPublishedAt,
                     String ruleVersion, BigInteger statusVersion, String chatRoomId) { }
 }

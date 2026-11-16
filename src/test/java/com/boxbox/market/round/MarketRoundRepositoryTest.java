@@ -1,8 +1,18 @@
 package com.boxbox.market.round;
 
 import com.boxbox.common.api.ApiException;
+import com.boxbox.market.stock.MarketPriceRepository;
+import com.boxbox.market.stock.MarketPriceService;
+import com.boxbox.market.stock.MarketStockRepository;
+import com.boxbox.market.stock.MarketStockService;
+import com.boxbox.market.trade.MarketOrderRepository;
+import com.boxbox.market.trade.MarketOrderService;
+import com.boxbox.market.trade.MarketQuoteRepository;
+import com.boxbox.market.trade.MarketQuoteService;
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 
@@ -202,6 +212,118 @@ class MarketRoundRepositoryTest {
                 () -> service.prices("1", "1", "5m", null, null, first.nextCursor(), "2", now)).getCode());
         assertEquals("STOCK_NOT_FOUND", assertThrows(ApiException.class,
                 () -> service.prices("1", "99", "1m", null, null, null, "2", now)).getCode());
+    }
+
+    @Test
+    void savesBuyAndSellQuotesWithoutChangingCashOrHoldings() {
+        addStockFixtures();
+        jdbc.execute("ALTER TABLE market_stocks ADD theoretical_price DECIMAL(28,8)");
+        jdbc.update("""
+                UPDATE market_stocks SET starting_price = 50000, current_price = 50000, theoretical_price = 50000
+                WHERE id = 1
+                """);
+        jdbc.execute("""
+                CREATE TABLE users (id BIGINT PRIMARY KEY, login_id VARCHAR(20), status VARCHAR(16),
+                                    coin_balance BIGINT, deleted_at DATETIME(6), updated_at DATETIME(6))
+                """);
+        jdbc.execute("""
+                CREATE TABLE positions (user_id BIGINT, stock_id BIGINT, quantity BIGINT, total_cost BIGINT,
+                    version BIGINT DEFAULT 0, created_at DATETIME(6), updated_at DATETIME(6),
+                    PRIMARY KEY (user_id, stock_id))
+                """);
+        jdbc.execute("""
+                CREATE TABLE trade_quotes (
+                    id BIGINT PRIMARY KEY, user_id BIGINT, stock_id BIGINT, side VARCHAR(8), quantity BIGINT,
+                    unit_prices VARCHAR(1000), total_amount BIGINT, fee BIGINT, average_unit_price DECIMAL(28,8),
+                    price_after BIGINT, price_version BIGINT, expires_at DATETIME(6), used_at DATETIME(6),
+                    created_at DATETIME(6), updated_at DATETIME(6)
+                )
+                """);
+        jdbc.update("INSERT INTO users VALUES (1, 'demo', 'ACTIVE', 1000000, NULL, NULL)");
+        jdbc.update("INSERT INTO positions (user_id, stock_id, quantity, total_cost) VALUES (1, 1, 2, 100001)");
+        var json = JsonMapper.builder().build();
+        var service = new MarketQuoteService(repository, new MarketRoundService(repository, json, 2026),
+                new MarketQuoteRepository(new NamedParameterJdbcTemplate(jdbc), json));
+        var now = Instant.parse("2026-11-16T00:01:00Z");
+        var buyBody = json.readTree("""
+                {"driverId":"1","side":"BUY","quantity":2}
+                """);
+        var buy = service.create("demo", "1", buyBody, now);
+        assertEquals(List.of(50000L, 50005L), buy.unitPrices());
+        assertEquals(100005, buy.totalAmount());
+        assertEquals(50010, buy.priceAfter());
+        assertEquals(0, new BigDecimal("0.005").compareTo(buy.changeRateFromStartingPrice()));
+        assertEquals(now.plusSeconds(5), buy.expiresAt());
+        assertNull(buy.estimatedRealizedPnl());
+
+        var sellBody = json.readTree("""
+                {"driverId":"1","side":"SELL","quantity":2}
+                """);
+        var sell = service.create("demo", "1", sellBody, now);
+        assertEquals(List.of(50000L, 50000L), sell.unitPrices());
+        assertEquals(50000, sell.priceAfter());
+        assertEquals(-1L, sell.estimatedRealizedPnl());
+        assertEquals(2, jdbc.queryForObject("SELECT COUNT(*) FROM trade_quotes WHERE used_at IS NULL", Integer.class));
+        assertEquals(1000000L, jdbc.queryForObject("SELECT coin_balance FROM users", Long.class));
+        assertEquals(2L, jdbc.queryForObject("SELECT quantity FROM positions", Long.class));
+
+        assertEquals("MARKET_CLOSED", assertThrows(ApiException.class, () ->
+                service.create("demo", "1", buyBody, Instant.parse("2026-11-17T00:00:00Z"))).getCode());
+        jdbc.update("UPDATE users SET coin_balance = 100000");
+        assertEquals("INSUFFICIENT_BALANCE", assertThrows(ApiException.class, () ->
+                service.create("demo", "1", buyBody, now)).getCode());
+        jdbc.update("UPDATE positions SET quantity = 1");
+        assertEquals("INSUFFICIENT_HOLDINGS", assertThrows(ApiException.class, () ->
+                service.create("demo", "1", sellBody, now)).getCode());
+
+        jdbc.update("UPDATE users SET coin_balance = 1000000");
+        jdbc.update("UPDATE positions SET quantity = 2");
+        jdbc.execute("""
+                CREATE TABLE trade_orders (
+                    id BIGINT PRIMARY KEY, user_id BIGINT, stock_id BIGINT, quote_id BIGINT,
+                    idempotency_key VARCHAR(64), request_hash BINARY(32), request_body VARCHAR(1000),
+                    type VARCHAR(16), status VARCHAR(16), quantity BIGINT, unit_prices VARCHAR(1000),
+                    total_amount BIGINT, fee BIGINT, allocated_cost BIGINT, realized_pnl BIGINT,
+                    cash_balance_after BIGINT, holding_quantity_after BIGINT, price_after BIGINT,
+                    price_version_after BIGINT, response_status INT, response_body VARCHAR(3000),
+                    executed_at DATETIME(6), created_at DATETIME(6), updated_at DATETIME(6)
+                )
+                """);
+        jdbc.execute("""
+                CREATE TABLE coin_ledger (id BIGINT AUTO_INCREMENT PRIMARY KEY, user_id BIGINT,
+                    order_id BIGINT, event_key VARCHAR(160), entry_type VARCHAR(24), amount_delta BIGINT,
+                    balance_after BIGINT, created_at DATETIME(6))
+                """);
+        jdbc.execute("""
+                CREATE TABLE stock_price_candles (stock_id BIGINT, interval_seconds INT, bucket_at DATETIME(6),
+                    open_price BIGINT, high_price BIGINT, low_price BIGINT, close_price BIGINT, volume BIGINT,
+                    PRIMARY KEY (interval_seconds, bucket_at, stock_id))
+                """);
+        var executions = new MarketOrderService(new MarketOrderRepository(jdbc),
+                new MarketRoundService(repository, json, 2026), json, Clock.fixed(now.plusSeconds(1), ZoneOffset.UTC));
+        var order = json.createObjectNode().put("quoteId", buy.quoteId());
+        String key = UUID.randomUUID().toString();
+        var filled = executions.execute("demo", "1", key, order);
+        assertEquals(200, filled.status());
+        assertEquals(899995L, filled.body().path("data").path("cashBalance").longValue());
+        assertEquals(4, filled.body().path("data").path("holdingQuantity").intValue());
+        assertEquals(filled, executions.execute("demo", "1", key, order));
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM coin_ledger", Integer.class));
+        assertEquals(4, jdbc.queryForObject("SELECT COUNT(*) FROM stock_price_candles WHERE volume = 2", Integer.class));
+
+        var alreadyUsed = executions.execute("demo", "1", UUID.randomUUID().toString(), order);
+        assertEquals(409, alreadyUsed.status());
+        assertEquals("QUOTE_ALREADY_USED", alreadyUsed.body().path("error").path("code").stringValue());
+        var stale = executions.execute("demo", "1", UUID.randomUUID().toString(),
+                json.createObjectNode().put("quoteId", sell.quoteId()));
+        assertEquals("PRICE_CHANGED", stale.body().path("error").path("code").stringValue());
+
+        var newSell = service.create("demo", "1", sellBody, now);
+        var sold = executions.execute("demo", "1", UUID.randomUUID().toString(),
+                json.createObjectNode().put("quoteId", newSell.quoteId()));
+        assertEquals(200, sold.status());
+        assertEquals(2, sold.body().path("data").path("holdingQuantity").intValue());
+        assertEquals(4, jdbc.queryForObject("SELECT COUNT(*) FROM stock_price_candles WHERE volume = 4", Integer.class));
     }
 
     private void addStockFixtures() {

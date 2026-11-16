@@ -1,7 +1,9 @@
-package com.boxbox.market.round;
+package com.boxbox.market.stock;
 
 import com.boxbox.common.api.ApiException;
-import com.boxbox.market.round.dto.MarketStockResponses;
+import com.boxbox.market.round.MarketRoundRepository;
+import com.boxbox.market.round.MarketRoundService;
+import com.boxbox.market.stock.dto.MarketStockResponses;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.RoundingMode;
@@ -20,7 +22,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 @Service
 @RequiredArgsConstructor
-class MarketStockService {
+public class MarketStockService {
     private static final int LAST_FINISH_RANK = 22;
     private static final List<Integer> DEFAULT_RESULT_BONUSES = List.of(8, 6, 5, 3, 3, 1, 1, 1, 1, 1);
     private static final Comparator<SortKey> ORDER =
@@ -127,7 +129,7 @@ class MarketStockService {
                 "라운드 정산 규칙을 읽을 수 없습니다.");
     }
 
-    static BigInteger stockLookupId(String value) {
+    public static BigInteger stockLookupId(String value) {
         if (!value.matches("[1-9][0-9]{0,19}")) {
             throw stockNotFound();
         }
@@ -138,7 +140,7 @@ class MarketStockService {
         return id;
     }
 
-    static ApiException stockNotFound() {
+    public static ApiException stockNotFound() {
         return new ApiException(HttpStatus.NOT_FOUND, "STOCK_NOT_FOUND", "마켓 종목을 찾을 수 없습니다.");
     }
 
