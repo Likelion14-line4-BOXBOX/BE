@@ -36,4 +36,11 @@ class MarketRoundController {
         var meta = ApiResponse.Meta.create();
         return new ApiResponse<>(stockService.list(roundId, teamId, sort, cursor, size, meta.serverTime()), meta);
     }
+
+    @GetMapping("/api/market/rounds/{roundId}/stocks/{driverId}")
+    ApiResponse<MarketStockResponses.Detail> stock(
+            @PathVariable("roundId") String roundId, @PathVariable("driverId") String driverId) {
+        var meta = ApiResponse.Meta.create();
+        return new ApiResponse<>(stockService.detail(roundId, driverId, meta.serverTime()), meta);
+    }
 }

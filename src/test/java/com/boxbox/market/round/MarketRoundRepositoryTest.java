@@ -60,7 +60,7 @@ class MarketRoundRepositoryTest {
                     (3, 1, 2026, 3, 20, 3, 100, 150, 1, '2026-11-16 00:00:00', 0)
                 """);
         var service = new MarketStockService(repository,
-                new MarketStockRepository(new NamedParameterJdbcTemplate(jdbc)));
+                new MarketStockRepository(new NamedParameterJdbcTemplate(jdbc)), JsonMapper.builder().build());
         var start = Instant.parse("2026-11-16T00:00:00Z");
         var close = Instant.parse("2026-11-17T00:00:00Z");
 
@@ -91,6 +91,28 @@ class MarketRoundRepositoryTest {
                 () -> service.list("1", null, "PRICE_DESC", first.nextCursor(), "20", start)).getCode());
         assertEquals("ROUND_NOT_FOUND", assertThrows(ApiException.class,
                 () -> service.list("2", null, "BASE_RANK", null, "20", start)).getCode());
+
+        assertTrue(service.detail("1", "1", start).settlementScenarios().isEmpty());
+        jdbc.update("UPDATE market_rounds SET rule_snapshot = ? WHERE id = 1",
+                """
+                {"resultBonusByRank":[8,0,0,0,0,0,0,0,0]}
+                """);
+        var detail = service.detail("1", "1", close);
+        assertEquals("1", detail.driver().driverId());
+        assertFalse(detail.tradable());
+        var win = detail.settlementScenarios().getFirst();
+        assertEquals(1, win.positionScore());
+        assertEquals(8, win.resultBonus());
+        assertEquals(9, win.finalScore());
+        assertEquals(109, win.settlementPrice().intValueExact());
+        var ninth = detail.settlementScenarios().getLast();
+        assertEquals(-35, ninth.positionScore());
+        assertEquals(-30, ninth.finalScore());
+        assertEquals(70, ninth.settlementPrice().intValueExact());
+        assertEquals("STOCK_NOT_FOUND", assertThrows(ApiException.class,
+                () -> service.detail("1", "1", start.minusNanos(1))).getCode());
+        assertEquals("STOCK_NOT_FOUND", assertThrows(ApiException.class,
+                () -> service.detail("1", "99", start)).getCode());
     }
 
     @Test

@@ -15,4 +15,16 @@ public final class MarketStockResponses {
     public record Item(Driver driver, int baseRank, BigInteger startingPrice, BigInteger currentPrice,
                        BigInteger changeAmount, BigDecimal changeRate, BigInteger priceVersion,
                        boolean tradable, Instant updatedAt, BigInteger totalBuyQuantity) { }
+
+    public record Detail(Driver driver, int baseRank, BigInteger startingPrice, BigInteger currentPrice,
+                         BigInteger changeAmount, BigDecimal changeRate, BigInteger priceVersion,
+                         boolean tradable, Instant updatedAt, List<SettlementScenario> settlementScenarios) {
+        public Detail(Item item, List<SettlementScenario> settlementScenarios) {
+            this(item.driver(), item.baseRank(), item.startingPrice(), item.currentPrice(), item.changeAmount(),
+                    item.changeRate(), item.priceVersion(), item.tradable(), item.updatedAt(), settlementScenarios);
+        }
+    }
+
+    public record SettlementScenario(Integer finishRank, int positionScore, int resultBonus, int finalScore,
+                                     BigInteger settlementPrice) { }
 }

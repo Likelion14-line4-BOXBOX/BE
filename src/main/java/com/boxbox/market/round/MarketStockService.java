@@ -7,6 +7,7 @@ import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Comparator;
 import java.util.List;
@@ -15,6 +16,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.json.JsonMapper;
 
 @Service
 @RequiredArgsConstructor
@@ -24,6 +26,7 @@ class MarketStockService {
 
     private final MarketRoundRepository rounds;
     private final MarketStockRepository stocks;
+    private final JsonMapper json;
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public MarketStockResponses.Page list(String roundId, String teamId, String sortValue,
@@ -36,10 +39,10 @@ class MarketStockService {
         SortKey after = parseCursor(cursor, cursorScope);
 
         var round = rounds.findById(id).orElseThrow(MarketRoundService::roundNotFound).round();
-        if (round.openAt() == null || now.isBefore(round.openAt()) || "SCHEDULED".equals(round.status())) {
+        if (!isPublished(round, now)) {
             return new MarketStockResponses.Page(List.of(), null, false);
         }
-        boolean tradable = "OPEN".equals(round.status()) && round.closeAt() != null && now.isBefore(round.closeAt());
+        boolean tradable = isTradable(round, now);
         var page = stocks.findByRound(id, round.season(), team).stream()
                 .map(row -> {
                     var item = toItem(row, tradable);
@@ -52,6 +55,76 @@ class MarketStockService {
         boolean hasNext = page.size() > size;
         String nextCursor = hasNext ? encodeCursor(cursorScope, page.get(size - 1).key()) : null;
         return new MarketStockResponses.Page(page.stream().limit(size).map(Entry::item).toList(), nextCursor, hasNext);
+    }
+
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public MarketStockResponses.Detail detail(String roundId, String driverId, Instant now) {
+        BigInteger roundKey = stockLookupId(roundId);
+        BigInteger driverKey = stockLookupId(driverId);
+        var detail = rounds.findById(roundKey).orElseThrow(MarketStockService::stockNotFound);
+        var round = detail.round();
+        if (!isPublished(round, now)) {
+            throw stockNotFound();
+        }
+        var row = stocks.findByDriver(roundKey, round.season(), driverKey)
+                .orElseThrow(MarketStockService::stockNotFound);
+        var item = toItem(row, isTradable(round, now));
+        return new MarketStockResponses.Detail(item, settlementScenarios(item, detail.ruleSnapshot()));
+    }
+
+    private List<MarketStockResponses.SettlementScenario> settlementScenarios(
+            MarketStockResponses.Item item, String snapshot) {
+        var bonuses = json.readTree(snapshot).path("resultBonusByRank");
+        if (bonuses.isMissingNode()) {
+            return List.of();
+        }
+        if (!bonuses.isArray() || bonuses.size() > 65_535) {
+            throw invalidSettlementRules();
+        }
+        var scenarios = new ArrayList<MarketStockResponses.SettlementScenario>(bonuses.size());
+        for (int index = 0; index < bonuses.size(); index++) {
+            var bonus = bonuses.get(index);
+            if (!bonus.isIntegralNumber() || !bonus.canConvertToInt() || bonus.intValue() < 0) {
+                throw invalidSettlementRules();
+            }
+            int finishRank = index + 1;
+            int positionScore = Math.toIntExact((long) (item.baseRank() - finishRank)
+                    * (item.baseRank() + finishRank - 1) / 2);
+            int finalScore = (int) Math.clamp((long) positionScore + bonus.intValue(), -30, 40);
+            BigInteger price = new BigDecimal(item.startingPrice()).multiply(BigDecimal.valueOf(100 + finalScore))
+                    .movePointLeft(2).setScale(0, RoundingMode.HALF_UP).toBigIntegerExact();
+            scenarios.add(new MarketStockResponses.SettlementScenario(
+                    finishRank, positionScore, bonus.intValue(), finalScore, price));
+        }
+        return List.copyOf(scenarios);
+    }
+
+    private static ApiException invalidSettlementRules() {
+        return new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR",
+                "라운드 정산 규칙을 읽을 수 없습니다.");
+    }
+
+    private static BigInteger stockLookupId(String value) {
+        if (!value.matches("[1-9][0-9]{0,19}")) {
+            throw stockNotFound();
+        }
+        var id = new BigInteger(value);
+        if (id.bitLength() > 64) {
+            throw stockNotFound();
+        }
+        return id;
+    }
+
+    private static ApiException stockNotFound() {
+        return new ApiException(HttpStatus.NOT_FOUND, "STOCK_NOT_FOUND", "마켓 종목을 찾을 수 없습니다.");
+    }
+
+    private static boolean isPublished(MarketRoundRepository.RoundRow round, Instant now) {
+        return round.openAt() != null && !now.isBefore(round.openAt()) && !"SCHEDULED".equals(round.status());
+    }
+
+    private static boolean isTradable(MarketRoundRepository.RoundRow round, Instant now) {
+        return "OPEN".equals(round.status()) && round.closeAt() != null && now.isBefore(round.closeAt());
     }
 
     private static MarketStockResponses.Item toItem(MarketStockRepository.StockRow row, boolean tradable) {
