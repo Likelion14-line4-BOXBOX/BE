@@ -36,14 +36,17 @@ class MarketRoundService {
     MarketRoundResponses.Detail detail(String roundId) {
         BigInteger id = parseRoundId(roundId);
         var detail = repository.findById(id).orElseThrow(MarketRoundService::roundNotFound);
-        var rate = json.readTree(detail.ruleSnapshot()).path("tradeImpactRate");
+        return new MarketRoundResponses.Detail(toRound(detail.round()), tradeImpactRate(detail.ruleSnapshot()),
+                "STARTING_PRICE", detail.settlementStatus());
+    }
+
+    BigDecimal tradeImpactRate(String ruleSnapshot) {
+        var rate = json.readTree(ruleSnapshot).path("tradeImpactRate");
         if (!rate.isMissingNode() && (!rate.isNumber() || rate.decimalValue().signum() < 0)) {
             throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR",
                     "라운드 거래 규칙을 읽을 수 없습니다.");
         }
-        BigDecimal tradeImpactRate = rate.isMissingNode() ? DEFAULT_TRADE_IMPACT_RATE : rate.decimalValue();
-        return new MarketRoundResponses.Detail(toRound(detail.round()), tradeImpactRate, "STARTING_PRICE",
-                detail.settlementStatus());
+        return rate.isMissingNode() ? DEFAULT_TRADE_IMPACT_RATE : rate.decimalValue();
     }
 
     static BigInteger parseRoundId(String roundId) {

@@ -204,6 +204,65 @@ class MarketRoundRepositoryTest {
                 () -> service.prices("1", "99", "1m", null, null, null, "2", now)).getCode());
     }
 
+    @Test
+    void savesBuyAndSellQuotesWithoutChangingCashOrHoldings() {
+        addStockFixtures();
+        jdbc.execute("ALTER TABLE market_stocks ADD theoretical_price DECIMAL(28,8)");
+        jdbc.update("""
+                UPDATE market_stocks SET starting_price = 50000, current_price = 50000, theoretical_price = 50000
+                WHERE id = 1
+                """);
+        jdbc.execute("""
+                CREATE TABLE users (id BIGINT PRIMARY KEY, login_id VARCHAR(20), status VARCHAR(16),
+                                    coin_balance BIGINT, deleted_at DATETIME(6))
+                """);
+        jdbc.execute("CREATE TABLE positions (user_id BIGINT, stock_id BIGINT, quantity BIGINT, total_cost BIGINT)");
+        jdbc.execute("""
+                CREATE TABLE trade_quotes (
+                    id BIGINT PRIMARY KEY, user_id BIGINT, stock_id BIGINT, side VARCHAR(8), quantity BIGINT,
+                    unit_prices VARCHAR(1000), total_amount BIGINT, fee BIGINT, average_unit_price DECIMAL(28,8),
+                    price_after BIGINT, price_version BIGINT, expires_at DATETIME(6), used_at DATETIME(6),
+                    created_at DATETIME(6), updated_at DATETIME(6)
+                )
+                """);
+        jdbc.update("INSERT INTO users VALUES (1, 'demo', 'ACTIVE', 1000000, NULL)");
+        jdbc.update("INSERT INTO positions VALUES (1, 1, 2, 100001)");
+        var json = JsonMapper.builder().build();
+        var service = new MarketQuoteService(repository, new MarketRoundService(repository, json, 2026),
+                new MarketQuoteRepository(new NamedParameterJdbcTemplate(jdbc), json));
+        var now = Instant.parse("2026-11-16T00:01:00Z");
+        var buyBody = json.readTree("""
+                {"driverId":"1","side":"BUY","quantity":2}
+                """);
+        var buy = service.create("demo", "1", buyBody, now);
+        assertEquals(List.of(50000L, 50005L), buy.unitPrices());
+        assertEquals(100005, buy.totalAmount());
+        assertEquals(50010, buy.priceAfter());
+        assertEquals(0, new BigDecimal("0.005").compareTo(buy.changeRateFromStartingPrice()));
+        assertEquals(now.plusSeconds(5), buy.expiresAt());
+        assertNull(buy.estimatedRealizedPnl());
+
+        var sellBody = json.readTree("""
+                {"driverId":"1","side":"SELL","quantity":2}
+                """);
+        var sell = service.create("demo", "1", sellBody, now);
+        assertEquals(List.of(50000L, 50000L), sell.unitPrices());
+        assertEquals(50000, sell.priceAfter());
+        assertEquals(-1L, sell.estimatedRealizedPnl());
+        assertEquals(2, jdbc.queryForObject("SELECT COUNT(*) FROM trade_quotes WHERE used_at IS NULL", Integer.class));
+        assertEquals(1000000L, jdbc.queryForObject("SELECT coin_balance FROM users", Long.class));
+        assertEquals(2L, jdbc.queryForObject("SELECT quantity FROM positions", Long.class));
+
+        assertEquals("MARKET_CLOSED", assertThrows(ApiException.class, () ->
+                service.create("demo", "1", buyBody, Instant.parse("2026-11-17T00:00:00Z"))).getCode());
+        jdbc.update("UPDATE users SET coin_balance = 100000");
+        assertEquals("INSUFFICIENT_BALANCE", assertThrows(ApiException.class, () ->
+                service.create("demo", "1", buyBody, now)).getCode());
+        jdbc.update("UPDATE positions SET quantity = 1");
+        assertEquals("INSUFFICIENT_HOLDINGS", assertThrows(ApiException.class, () ->
+                service.create("demo", "1", sellBody, now)).getCode());
+    }
+
     private void addStockFixtures() {
         addRound(1, 2026, "OPEN", "2026-11-16 00:00:00", "2026-11-17 00:00:00");
         jdbc.execute("CREATE TABLE drivers (id BIGINT PRIMARY KEY, name VARCHAR(120), car_number INT)");
