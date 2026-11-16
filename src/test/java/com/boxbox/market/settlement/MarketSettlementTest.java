@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import tools.jackson.databind.json.JsonMapper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -39,7 +40,8 @@ class MarketSettlementTest {
                     (4, 2, 21, 1, 'PUBLISHED', 100, 105, 5, 5, 7, 19, '2026-11-12 00:00:00'),
                     (5, 1, 99, 1, 'FAILED', NULL, 104, 4, 4, NULL, 18, NULL)
                 """);
-        var service = new MarketSettlementService(new MarketSettlementRepository(new NamedParameterJdbcTemplate(jdbc)));
+        var service = new MarketSettlementService(new MarketSettlementRepository(new NamedParameterJdbcTemplate(jdbc)),
+                JsonMapper.builder().build());
         var now = Instant.parse("2026-11-17T00:00:00Z");
 
         var first = service.list("demo", "2026", null, "1", now);
@@ -66,5 +68,47 @@ class MarketSettlementTest {
 
         assertThrows(ApiException.class, () -> service.list("demo", "2025", first.nextCursor(), "1", now));
         assertTrue(service.list(null, null, null, "20", now).items().isEmpty());
+
+        jdbc.execute("ALTER TABLE market_rounds ADD rule_version VARCHAR(40) DEFAULT 'current-rule'");
+        jdbc.execute("ALTER TABLE user_settlements ADD rule_snapshot VARCHAR(1000)");
+        jdbc.execute("ALTER TABLE user_settlements ADD season_rank INT");
+        jdbc.execute("ALTER TABLE user_settlements ADD season_return_rate DECIMAL(20,8)");
+        jdbc.update("UPDATE user_settlements SET rule_snapshot = ?, season_rank = 10 WHERE id = 3",
+                """
+                {"ruleVersion":"frozen-rule"}
+                """);
+        jdbc.execute("CREATE TABLE market_stocks (id BIGINT, round_id BIGINT, driver_id BIGINT)");
+        jdbc.execute("CREATE TABLE drivers (id BIGINT, name VARCHAR(100))");
+        jdbc.execute("""
+                CREATE TABLE user_settlement_items (user_settlement_id BIGINT, user_id BIGINT, round_id BIGINT,
+                    settlement_version INT, stock_id BIGINT, base_rank INT, finish_rank INT, position_score INT,
+                    result_bonus INT, final_score INT, starting_price BIGINT, settlement_price BIGINT,
+                    quantity BIGINT, total_cost BIGINT, proceeds BIGINT, pnl BIGINT)
+                """);
+        jdbc.update("INSERT INTO drivers VALUES (1, 'Driver A')");
+        jdbc.update("INSERT INTO market_stocks VALUES (1, 21, 1)");
+        jdbc.update("""
+                INSERT INTO user_settlement_items VALUES
+                    (3, 1, 21, 1, 1, 21, NULL, -21, 0, -21, 23, 18, 1, 14, 18, 4),
+                    (3, 2, 21, 1, 1, 21, NULL, -21, 0, -21, 23, 18, 2, 33, 36, 3),
+                    (3, 1, 21, 2, 1, 21, NULL, -21, 0, -21, 23, 18, 2, 33, 36, 3)
+                """);
+
+        var detail = service.detail("demo", "21", now);
+        assertEquals("frozen-rule", detail.ruleVersion());
+        assertEquals(1L, detail.settlementVersion());
+        assertEquals(10L, detail.seasonRank());
+        assertEquals(1, detail.items().size());
+        var item = detail.items().getFirst();
+        assertEquals("Driver A", item.driverName());
+        assertNull(item.finishRank());
+        assertEquals(BigInteger.valueOf(18), item.settlementPrice());
+        assertEquals(BigInteger.valueOf(4), item.settlementPnl());
+        assertEquals("SETTLEMENT_NOT_PUBLISHED", assertThrows(ApiException.class,
+                () -> service.detail("demo", "22", now)).getCode());
+        assertEquals("SETTLEMENT_NOT_FOUND", assertThrows(ApiException.class,
+                () -> service.detail("other", "22", now)).getCode());
+        assertEquals("SETTLEMENT_NOT_FOUND", assertThrows(ApiException.class,
+                () -> service.detail(null, "21", now)).getCode());
     }
 }
