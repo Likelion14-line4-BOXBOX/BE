@@ -11,6 +11,7 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -38,6 +39,58 @@ class MarketRoundRepositoryTest {
                     rule_snapshot VARCHAR(1000), settlement_status VARCHAR(24))
                 """);
         jdbc.execute("CREATE TABLE chat_rooms (id BIGINT PRIMARY KEY, race_id BIGINT)");
+    }
+
+    @Test
+    void listsStocksUsingFrozenTeamAndKeepsEqualPricesAcrossPages() {
+        addRound(1, 2026, "OPEN", "2026-11-16 00:00:00", "2026-11-17 00:00:00");
+        jdbc.execute("CREATE TABLE drivers (id BIGINT PRIMARY KEY, name VARCHAR(120), car_number INT)");
+        jdbc.execute("CREATE TABLE teams (id BIGINT PRIMARY KEY, name VARCHAR(120))");
+        jdbc.execute("""
+                CREATE TABLE market_stocks (id BIGINT PRIMARY KEY, round_id BIGINT, season_year INT,
+                    driver_id BIGINT, team_id BIGINT, base_rank INT, starting_price BIGINT, current_price BIGINT,
+                    price_version BIGINT, updated_at DATETIME(6), total_buy_quantity BIGINT)
+                """);
+        jdbc.update("INSERT INTO drivers VALUES (1, 'Driver A', 44), (2, 'Driver B', 63), (3, 'Driver C', 4)");
+        jdbc.update("INSERT INTO teams VALUES (10, 'Team A'), (20, 'Team B')");
+        jdbc.update("""
+                INSERT INTO market_stocks VALUES
+                    (1, 1, 2026, 1, 10, 2, 100, 120, 1, '2026-11-16 00:00:00', 5),
+                    (2, 1, 2026, 2, 10, 1, 150, 120, 1, '2026-11-16 00:00:00', 0),
+                    (3, 1, 2026, 3, 20, 3, 100, 150, 1, '2026-11-16 00:00:00', 0)
+                """);
+        var service = new MarketStockService(repository,
+                new MarketStockRepository(new NamedParameterJdbcTemplate(jdbc)));
+        var start = Instant.parse("2026-11-16T00:00:00Z");
+        var close = Instant.parse("2026-11-17T00:00:00Z");
+
+        var beforeOpen = service.list("1", "10", "PRICE_DESC", null, "1", start.minusNanos(1));
+        assertTrue(beforeOpen.items().isEmpty());
+        assertNull(beforeOpen.nextCursor());
+        assertFalse(beforeOpen.hasNext());
+
+        var first = service.list("1", "10", "PRICE_DESC", null, "1", start);
+        var item = first.items().getFirst();
+        assertEquals("1", item.driver().driverId());
+        assertEquals("Team A", item.driver().teamName());
+        assertEquals(20, item.changeRate().intValueExact());
+        assertTrue(item.tradable());
+        assertTrue(first.hasNext());
+
+        var next = service.list("1", "10", "PRICE_DESC", first.nextCursor(), "1", close);
+        assertEquals("2", next.items().getFirst().driver().driverId());
+        assertEquals(-20, next.items().getFirst().changeRate().intValueExact());
+        assertFalse(next.items().getFirst().tradable());
+        assertNull(next.nextCursor());
+        assertFalse(next.hasNext());
+
+        assertEquals("3", service.list("1", null, "CHANGE_RATE_DESC", null, "20", start)
+                .items().getFirst().driver().driverId());
+        assertTrue(service.list("1", "99", "BASE_RANK", null, "20", start).items().isEmpty());
+        assertEquals("INVALID_REQUEST", assertThrows(ApiException.class,
+                () -> service.list("1", null, "PRICE_DESC", first.nextCursor(), "20", start)).getCode());
+        assertEquals("ROUND_NOT_FOUND", assertThrows(ApiException.class,
+                () -> service.list("2", null, "BASE_RANK", null, "20", start)).getCode());
     }
 
     @Test
