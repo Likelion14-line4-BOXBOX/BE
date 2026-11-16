@@ -21,6 +21,8 @@ import tools.jackson.databind.json.JsonMapper;
 @Service
 @RequiredArgsConstructor
 class MarketStockService {
+    private static final int LAST_FINISH_RANK = 22;
+    private static final List<Integer> DEFAULT_RESULT_BONUSES = List.of(8, 6, 5, 3, 3, 1, 1, 1, 1, 1);
     private static final Comparator<SortKey> ORDER =
             Comparator.comparing(SortKey::value).thenComparing(SortKey::id);
 
@@ -75,28 +77,49 @@ class MarketStockService {
     private List<MarketStockResponses.SettlementScenario> settlementScenarios(
             MarketStockResponses.Item item, String snapshot) {
         var bonuses = json.readTree(snapshot).path("resultBonusByRank");
-        if (bonuses.isMissingNode()) {
-            return List.of();
-        }
-        if (!bonuses.isArray() || bonuses.size() > 65_535) {
+        if (!bonuses.isMissingNode() && (!bonuses.isArray() || bonuses.size() > 65_535)) {
             throw invalidSettlementRules();
         }
-        var scenarios = new ArrayList<MarketStockResponses.SettlementScenario>(bonuses.size());
-        for (int index = 0; index < bonuses.size(); index++) {
-            var bonus = bonuses.get(index);
-            if (!bonus.isIntegralNumber() || !bonus.canConvertToInt() || bonus.intValue() < 0) {
-                throw invalidSettlementRules();
-            }
-            int finishRank = index + 1;
-            int positionScore = Math.toIntExact((long) (item.baseRank() - finishRank)
-                    * (item.baseRank() + finishRank - 1) / 2);
-            int finalScore = (int) Math.clamp((long) positionScore + bonus.intValue(), -30, 40);
-            BigInteger price = new BigDecimal(item.startingPrice()).multiply(BigDecimal.valueOf(100 + finalScore))
-                    .movePointLeft(2).setScale(0, RoundingMode.HALF_UP).toBigIntegerExact();
-            scenarios.add(new MarketStockResponses.SettlementScenario(
-                    finishRank, positionScore, bonus.intValue(), finalScore, price));
+        int baseRank = item.baseRank();
+        if (baseRank < 1 || baseRank > LAST_FINISH_RANK) {
+            throw invalidSettlementRules();
         }
+
+        List<Integer> finishRanks;
+        if (baseRank <= 3) {
+            finishRanks = List.of(1, 2, 3, 6);
+        } else if (baseRank <= 19) {
+            finishRanks = List.of(baseRank - 3, baseRank - 1, baseRank, baseRank + 3);
+        } else {
+            finishRanks = List.of(baseRank - 3, baseRank - 2, baseRank - 1, baseRank);
+        }
+
+        var scenarios = new ArrayList<MarketStockResponses.SettlementScenario>(5);
+        for (int finishRank : finishRanks) {
+            int index = finishRank - 1;
+            int resultBonus = index < DEFAULT_RESULT_BONUSES.size() ? DEFAULT_RESULT_BONUSES.get(index) : 0;
+            if (index < bonuses.size()) {
+                var bonus = bonuses.get(index);
+                if (!bonus.isIntegralNumber() || !bonus.canConvertToInt() || bonus.intValue() < 0) {
+                    throw invalidSettlementRules();
+                }
+                resultBonus = bonus.intValue();
+            }
+            scenarios.add(scenario(item, finishRank, finishRank, resultBonus));
+        }
+        scenarios.add(scenario(item, null, LAST_FINISH_RANK, 0));
         return List.copyOf(scenarios);
+    }
+
+    private static MarketStockResponses.SettlementScenario scenario(
+            MarketStockResponses.Item item, Integer finishRank, int rankForScore, int resultBonus) {
+        int baseRank = item.baseRank();
+        // Sum the crossed ranks, including the better rank and excluding the worse rank.
+        int positionScore = (baseRank - rankForScore) * (baseRank + rankForScore - 1) / 2;
+        int finalScore = (int) Math.clamp((long) positionScore + resultBonus, -30, 40);
+        BigInteger price = new BigDecimal(item.startingPrice()).multiply(BigDecimal.valueOf(100 + finalScore))
+                .movePointLeft(2).setScale(0, RoundingMode.HALF_UP).toBigIntegerExact();
+        return new MarketStockResponses.SettlementScenario(finishRank, positionScore, resultBonus, finalScore, price);
     }
 
     private static ApiException invalidSettlementRules() {

@@ -3,6 +3,7 @@ package com.boxbox.market.round;
 import com.boxbox.common.api.ApiException;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -78,7 +79,9 @@ class MarketRoundRepositoryTest {
         assertEquals("ROUND_NOT_FOUND", assertThrows(ApiException.class,
                 () -> service.list("2", null, "BASE_RANK", null, "20", start)).getCode());
 
-        assertTrue(service.detail("1", "1", start).settlementScenarios().isEmpty());
+        var defaultScenarios = service.detail("1", "1", start).settlementScenarios();
+        assertEquals(5, defaultScenarios.size());
+        assertEquals(6, defaultScenarios.get(1).resultBonus());
         jdbc.update("UPDATE market_rounds SET rule_snapshot = ? WHERE id = 1",
                 """
                 {"resultBonusByRank":[8,0,0,0,0,0,0,0,0]}
@@ -91,10 +94,27 @@ class MarketRoundRepositoryTest {
         assertEquals(8, win.resultBonus());
         assertEquals(9, win.finalScore());
         assertEquals(109, win.settlementPrice().intValueExact());
-        var ninth = detail.settlementScenarios().getLast();
-        assertEquals(-35, ninth.positionScore());
-        assertEquals(-30, ninth.finalScore());
-        assertEquals(70, ninth.settlementPrice().intValueExact());
+        var retirement = detail.settlementScenarios().getLast();
+        assertNull(retirement.finishRank());
+        assertEquals(-230, retirement.positionScore());
+        assertEquals(0, retirement.resultBonus());
+        assertEquals(-30, retirement.finalScore());
+        assertEquals(70, retirement.settlementPrice().intValueExact());
+
+        jdbc.update("UPDATE market_stocks SET base_rank = 6 WHERE id = 1");
+        var middle = service.detail("1", "1", start).settlementScenarios();
+        assertEquals(List.of(3, 5, 6, 9),
+                middle.subList(0, 4).stream().map(scenario -> scenario.finishRank()).toList());
+        assertEquals(-216, middle.getLast().positionScore());
+
+        jdbc.update("UPDATE market_stocks SET base_rank = 21 WHERE id = 1");
+        var bottom = service.detail("1", "1", start).settlementScenarios();
+        assertEquals(List.of(18, 19, 20, 21),
+                bottom.subList(0, 4).stream().map(scenario -> scenario.finishRank()).toList());
+        assertEquals(-21, bottom.getLast().finalScore());
+
+        jdbc.update("UPDATE market_stocks SET base_rank = 22 WHERE id = 1");
+        assertEquals(0, service.detail("1", "1", start).settlementScenarios().getLast().finalScore());
         assertEquals("STOCK_NOT_FOUND", assertThrows(ApiException.class,
                 () -> service.detail("1", "1", start.minusNanos(1))).getCode());
         assertEquals("STOCK_NOT_FOUND", assertThrows(ApiException.class,
