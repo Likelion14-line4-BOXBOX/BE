@@ -34,14 +34,7 @@ class MarketRoundService {
     }
 
     MarketRoundResponses.Detail detail(String roundId) {
-        if (!roundId.matches("[1-9][0-9]{0,19}")) {
-            throw roundNotFound();
-        }
-        BigInteger id = new BigInteger(roundId);
-        if (id.compareTo(MAX_ROUND_ID) > 0) {
-            throw roundNotFound();
-        }
-
+        BigInteger id = parseRoundId(roundId);
         var detail = repository.findById(id).orElseThrow(MarketRoundService::roundNotFound);
         var rate = json.readTree(detail.ruleSnapshot()).path("tradeImpactRate");
         if (!rate.isMissingNode() && (!rate.isNumber() || rate.decimalValue().signum() < 0)) {
@@ -53,7 +46,19 @@ class MarketRoundService {
                 detail.settlementStatus());
     }
 
-    private static ApiException roundNotFound() {
+    static BigInteger parseRoundId(String roundId) {
+        if (!roundId.matches("[1-9][0-9]{0,19}")) {
+            throw roundNotFound();
+        }
+        BigInteger id = new BigInteger(roundId);
+        if (id.compareTo(MAX_ROUND_ID) > 0) {
+            throw roundNotFound();
+        }
+
+        return id;
+    }
+
+    static ApiException roundNotFound() {
         return new ApiException(HttpStatus.NOT_FOUND, "ROUND_NOT_FOUND", "마켓 라운드를 찾을 수 없습니다.");
     }
 
