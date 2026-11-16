@@ -1,7 +1,7 @@
-package com.boxbox.market.round;
+package com.boxbox.market.trade;
 
 import com.boxbox.common.api.ApiException;
-import com.boxbox.market.round.dto.MarketQuoteResponse;
+import com.boxbox.market.trade.dto.MarketQuoteResponse;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.security.SecureRandom;
@@ -18,7 +18,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 @Repository
 @RequiredArgsConstructor
-class MarketQuoteRepository {
+public class MarketQuoteRepository {
     private static final SecureRandom QUOTE_IDS = new SecureRandom();
     private final NamedParameterJdbcTemplate jdbc;
     private final JsonMapper json;

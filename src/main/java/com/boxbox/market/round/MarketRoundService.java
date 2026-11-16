@@ -11,7 +11,7 @@ import org.springframework.stereotype.Service;
 import tools.jackson.databind.json.JsonMapper;
 
 @Service
-class MarketRoundService {
+public class MarketRoundService {
     private static final BigDecimal DEFAULT_TRADE_IMPACT_RATE = new BigDecimal("0.01");
     private static final BigInteger MAX_ROUND_ID = new BigInteger("18446744073709551615");
 
@@ -40,7 +40,7 @@ class MarketRoundService {
                 "STARTING_PRICE", detail.settlementStatus());
     }
 
-    BigDecimal tradeImpactRate(String ruleSnapshot) {
+    public BigDecimal tradeImpactRate(String ruleSnapshot) {
         var rate = json.readTree(ruleSnapshot).path("tradeImpactRate");
         if (!rate.isMissingNode() && (!rate.isNumber() || rate.decimalValue().signum() < 0)) {
             throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR",
@@ -49,7 +49,7 @@ class MarketRoundService {
         return rate.isMissingNode() ? DEFAULT_TRADE_IMPACT_RATE : rate.decimalValue();
     }
 
-    static BigInteger parseRoundId(String roundId) {
+    public static BigInteger parseRoundId(String roundId) {
         if (!roundId.matches("[1-9][0-9]{0,19}")) {
             throw roundNotFound();
         }
@@ -61,7 +61,7 @@ class MarketRoundService {
         return id;
     }
 
-    static ApiException roundNotFound() {
+    public static ApiException roundNotFound() {
         return new ApiException(HttpStatus.NOT_FOUND, "ROUND_NOT_FOUND", "마켓 라운드를 찾을 수 없습니다.");
     }
 

@@ -1,4 +1,4 @@
-package com.boxbox.market.round.dto;
+package com.boxbox.market.trade.dto;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;

@@ -1,8 +1,9 @@
-package com.boxbox.market.round;
+package com.boxbox.market.stock;
 
 import com.boxbox.common.api.ApiException;
-import com.boxbox.market.round.dto.MarketStockResponses.Candle;
-import com.boxbox.market.round.dto.MarketStockResponses.Prices;
+import com.boxbox.market.round.MarketRoundRepository;
+import com.boxbox.market.stock.dto.MarketStockResponses.Candle;
+import com.boxbox.market.stock.dto.MarketStockResponses.Prices;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -21,7 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
-class MarketPriceService {
+public class MarketPriceService {
     private static final Duration MAX_RANGE = Duration.ofDays(31);
     private static final Map<String, Integer> INTERVALS = Map.of("1m", 60, "5m", 300, "1h", 3600, "1d", 86400);
 

@@ -1,4 +1,4 @@
-package com.boxbox.market.round;
+package com.boxbox.market.trade;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;

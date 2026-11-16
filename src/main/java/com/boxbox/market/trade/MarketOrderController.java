@@ -1,4 +1,4 @@
-package com.boxbox.market.round;
+package com.boxbox.market.trade;
 
 import com.boxbox.auth.AuthPrincipal;
 import com.boxbox.common.api.ApiException;

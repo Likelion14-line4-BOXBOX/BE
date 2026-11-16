@@ -1,7 +1,10 @@
-package com.boxbox.market.round;
+package com.boxbox.market.trade;
 
 import com.boxbox.common.api.ApiException;
-import com.boxbox.market.round.dto.MarketQuoteResponse;
+import com.boxbox.market.round.MarketRoundRepository;
+import com.boxbox.market.round.MarketRoundService;
+import com.boxbox.market.stock.MarketStockService;
+import com.boxbox.market.trade.dto.MarketQuoteResponse;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.RoundingMode;
@@ -19,7 +22,7 @@ import tools.jackson.databind.JsonNode;
 
 @Service
 @RequiredArgsConstructor
-class MarketQuoteService {
+public class MarketQuoteService {
     private final MarketRoundRepository rounds;
     private final MarketRoundService rules;
     private final MarketQuoteRepository quotes;

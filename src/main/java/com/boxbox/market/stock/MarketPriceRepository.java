@@ -1,6 +1,6 @@
-package com.boxbox.market.round;
+package com.boxbox.market.stock;
 
-import com.boxbox.market.round.dto.MarketStockResponses.Candle;
+import com.boxbox.market.stock.dto.MarketStockResponses.Candle;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.time.Instant;
@@ -15,7 +15,7 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 @RequiredArgsConstructor
-class MarketPriceRepository {
+public class MarketPriceRepository {
     private final NamedParameterJdbcTemplate jdbc;
 
     Optional<BigInteger> previousClose(BigInteger stockId, int interval, Instant start) {

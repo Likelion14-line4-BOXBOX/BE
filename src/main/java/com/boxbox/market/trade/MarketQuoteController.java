@@ -1,9 +1,9 @@
-package com.boxbox.market.round;
+package com.boxbox.market.trade;
 
 import com.boxbox.auth.AuthPrincipal;
 import com.boxbox.common.api.ApiException;
 import com.boxbox.common.api.ApiResponse;
-import com.boxbox.market.round.dto.MarketQuoteResponse;
+import com.boxbox.market.trade.dto.MarketQuoteResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PathVariable;
