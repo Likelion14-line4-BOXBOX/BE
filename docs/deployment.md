@@ -42,6 +42,10 @@ python3 deploy/publish.py --initialize-db
 
 기본 브랜치 dev를 유지해도 main push 자동 배포는 동작한다. 수동 Run workflow 버튼은 워크플로 파일이 기본 브랜치에도 있어야 표시된다. 수동으로 dev를 선택하면 테스트만 수행한다.
 
+## 단기 연동 계정의 access 기간
+
+기본 access 기간은15분이다. 운영자가 대상 loginId를 실제 운영 DB에서 조회해 회원 ID를 확인한 뒤, 호스트 /etc/boxbox/config.json에 extended_access_user_ids(정수 배열)와 extended_access_lifetime("P10D")를 설정하고 재배포하면 그 회원에게만10일 access token을 발급한다. runtime은 대상 회원의 존재/ACTIVE 상태를 확인한 후 환경변수를 만들며, 일반 회원의 JWT 검증 상한은 계속900초다. refresh 쿠키/세션14일과 회전·재사용 검출·로그아웃은 유지한다. 종료 시 배열을 비우고 재배포한다. 대상의 기존15분 토큰은 자동 연장되지 않으므로 다시 로그인하거나 갱신한다. 계정/서명 키/비밀번호를 새로 생성하거나 변경하지 않는다.
+
 ## FE와 종료
 
 업무 API 요청·응답 계약은 유지한다. 현재 AllowedOrigins는 localhost/127.0.0.1의5173·3000 및 사용자 지정 https://project-boxbox.vercel.app이다. FE 주소가 바뀌면 정확한 Origin을 호스트 config.json에 반영하고 재배포한다. credentials: include와 Secure/SameSite=None 쿠키의 실제 브라우저 저장·회전·로그아웃을 별도 확인한다. 제3자 쿠키 차단은 SameSite만으로 해제되지 않아 필요하면 FE 개발 프록시/같은 사이트 도메인 구성을 사용한다.
