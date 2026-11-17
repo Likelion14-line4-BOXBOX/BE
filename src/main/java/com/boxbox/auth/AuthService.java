@@ -48,7 +48,11 @@ class AuthService {
         String hash = passwords.encode(input.password());
         return transaction.execute(status -> {
             if (users.byLogin(input.loginId()).isPresent()) throw duplicateLogin();
-            if (users.nicknameExists(input.nickname())) throw duplicateNickname();
+            if (users.nicknameExists(input.nickname())) {
+                // A concurrent signup may have committed after the first login ID lookup.
+                if (users.byLogin(input.loginId()).isPresent()) throw duplicateLogin();
+                throw duplicateNickname();
+            }
             try {
                 long id = users.createUser(input, hash, settings.initialCoins, clock.instant());
                 return new SignupResponse(Long.toString(id), input.loginId(), input.nickname());
