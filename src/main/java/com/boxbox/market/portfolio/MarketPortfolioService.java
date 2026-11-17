@@ -16,7 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
-class MarketPortfolioService {
+public class MarketPortfolioService {
     private final MarketPortfolioRepository repository;
     private final MarketRoundService roundService;
     private final MarketRoundRepository rounds;
