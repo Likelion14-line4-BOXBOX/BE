@@ -110,7 +110,7 @@ def app_env():
         'AUTH_EXTENDED_ACCESS_USER_IDS=' + ','.join(map(str, extended_ids)),
         'AUTH_EXTENDED_ACCESS_LIFETIME=' + extended_lifetime,
         'SERVER_SERVLET_SESSION_COOKIE_SECURE=true', 'SERVER_SERVLET_SESSION_COOKIE_SAME_SITE=None',
-        'MARKET_PREPARATION_ENABLED=false',
+        'MARKET_PREPARATION_ENABLED=true',
     ]) + '\n')
     return path
 
