@@ -1,0 +1,64 @@
+name: Test and deploy BOXBOX
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main, dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: boxbox-${{ github.event_name == 'pull_request' && github.ref || 'production' }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Test and build
+        run: bash gradlew clean test bootJar --no-daemon --console=plain
+      - name: Test release failure handling
+        run: python3 -m unittest discover -s deploy/tests -v
+      - name: Validate AWS template
+        run: |
+          python3 -m pip install --disable-pip-version-check cfn-lint==1.60.1
+          cfn-lint deploy/aws.yaml
+      - name: Package tested release
+        run: python3 deploy/package.py
+      - name: Verify container HTTP, authentication, SSE and restart
+        run: |
+          docker build --platform linux/amd64 -t boxbox-verify:46 .
+          python3 deploy/verify_local.py
+      - name: Check deployment configuration
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        env:
+          ROLE: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          STACK: ${{ vars.AWS_STACK_NAME }}
+        run: |
+          test -n "$ROLE" || { echo 'Set AWS_DEPLOY_ROLE_ARN repository variable'; exit 1; }
+          test -n "$STACK" || { echo 'Set AWS_STACK_NAME repository variable'; exit 1; }
+      - name: Authenticate to AWS with OIDC
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: aws-actions/configure-aws-credentials@cabfdba3510de1431bac9dba27511d97497fc100 # v5
+        with:
+          aws-region: ap-northeast-2
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: boxbox-${{ github.run_id }}
+      - name: Publish and deploy main
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        env:
+          AWS_STACK_NAME: ${{ vars.AWS_STACK_NAME }}
+          RELEASE_REVISION: ${{ github.sha }}
+        run: python3 deploy/publish.py
