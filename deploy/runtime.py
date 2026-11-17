@@ -111,6 +111,7 @@ def app_env(public_ip=None):
         'AUTH_EXTENDED_ACCESS_LIFETIME=' + extended_lifetime,
         'SERVER_SERVLET_SESSION_COOKIE_SECURE=true', 'SERVER_SERVLET_SESSION_COOKIE_SAME_SITE=None',
         'MARKET_PREPARATION_ENABLED=true',
+        'MARKET_SETTLEMENT_ENABLED=true',
         'POST_MEDIA_DIRECTORY=/var/lib/boxbox/media/uploads',
         'POST_MEDIA_PUBLIC_BASE_URL=' + ('https://' + str(ipaddress.IPv4Address(public_ip)) if public_ip else ''),
     ]) + '\n')
