@@ -106,7 +106,7 @@ class MarketRoundRepositoryTest {
         assertEquals(109, win.settlementPrice().intValueExact());
         var retirement = detail.settlementScenarios().getLast();
         assertNull(retirement.finishRank());
-        assertEquals(-230, retirement.positionScore());
+        assertEquals(-30, retirement.positionScore());
         assertEquals(0, retirement.resultBonus());
         assertEquals(-30, retirement.finalScore());
         assertEquals(70, retirement.settlementPrice().intValueExact());
@@ -115,16 +115,16 @@ class MarketRoundRepositoryTest {
         var middle = service.detail("1", "1", start).settlementScenarios();
         assertEquals(List.of(3, 5, 6, 9),
                 middle.subList(0, 4).stream().map(scenario -> scenario.finishRank()).toList());
-        assertEquals(-216, middle.getLast().positionScore());
+        assertEquals(-30, middle.getLast().positionScore());
 
         jdbc.update("UPDATE market_stocks SET base_rank = 21 WHERE id = 1");
         var bottom = service.detail("1", "1", start).settlementScenarios();
         assertEquals(List.of(18, 19, 20, 21),
                 bottom.subList(0, 4).stream().map(scenario -> scenario.finishRank()).toList());
-        assertEquals(-21, bottom.getLast().finalScore());
+        assertEquals(-30, bottom.getLast().finalScore());
 
         jdbc.update("UPDATE market_stocks SET base_rank = 22 WHERE id = 1");
-        assertEquals(0, service.detail("1", "1", start).settlementScenarios().getLast().finalScore());
+        assertEquals(-30, service.detail("1", "1", start).settlementScenarios().getLast().finalScore());
         assertEquals("STOCK_NOT_FOUND", assertThrows(ApiException.class,
                 () -> service.detail("1", "1", start.minusNanos(1))).getCode());
         assertEquals("STOCK_NOT_FOUND", assertThrows(ApiException.class,
@@ -310,6 +310,12 @@ class MarketRoundRepositoryTest {
                     open_price BIGINT, high_price BIGINT, low_price BIGINT, close_price BIGINT, volume BIGINT,
                     PRIMARY KEY (interval_seconds, bucket_at, stock_id))
                 """);
+        jdbc.execute("ALTER TABLE market_rounds ADD stream_sequence BIGINT DEFAULT 0");
+        jdbc.execute("""
+                CREATE TABLE stream_events (id BIGINT PRIMARY KEY, round_id BIGINT, stream_sequence BIGINT,
+                    event_type VARCHAR(40), payload VARCHAR(1000), occurred_at DATETIME(6),
+                    published_at DATETIME(6), expires_at DATETIME(6))
+                """);
         var executions = new MarketOrderService(new MarketOrderRepository(jdbc),
                 new MarketRoundService(repository, json, 2026), json, Clock.fixed(now.plusSeconds(1), ZoneOffset.UTC));
         var order = json.createObjectNode().put("quoteId", buy.quoteId());
@@ -344,6 +350,8 @@ class MarketRoundRepositoryTest {
         assertEquals(409, closed.status());
         assertEquals("MARKET_CLOSED", closed.body().path("error").path("code").stringValue());
         assertEquals(2, jdbc.queryForObject("SELECT COUNT(*) FROM coin_ledger", Integer.class));
+        assertEquals(2, jdbc.queryForObject("SELECT COUNT(*) FROM stream_events WHERE event_type = 'PRICE_UPDATED'",
+                Integer.class));
     }
 
     private void addStockFixtures() {

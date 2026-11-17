@@ -1,5 +1,8 @@
 package com.boxbox.market.trade;
 
+import com.boxbox.market.event.MarketEventLog;
+import java.util.Map;
+
 import com.boxbox.common.api.ApiException;
 import com.boxbox.market.trade.dto.MarketOrderResponse;
 import java.math.BigDecimal;
@@ -121,6 +124,9 @@ public class MarketOrderRepository {
                 """, userId, Long.parseLong(order.orderId()),
                 "ORDER:" + order.orderId(), order.type(), delta, order.cashBalance(), when);
         recordCandles(stockId, order);
+        MarketEventLog.append(jdbc, new BigDecimal(order.roundId()), "PRICE_UPDATED", Map.of(
+                "roundId", order.roundId(), "driverId", order.driverId(), "currentPrice", order.currentPrice(),
+                "priceVersion", order.priceVersion()), when);
     }
 
     private void recordCandles(BigDecimal stockId, MarketOrderResponse order) {

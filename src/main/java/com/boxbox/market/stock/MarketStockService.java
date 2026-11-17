@@ -1,6 +1,7 @@
 package com.boxbox.market.stock;
 
 import com.boxbox.common.api.ApiException;
+import com.boxbox.market.settlement.MarketSettlementPrice;
 import com.boxbox.market.round.MarketRoundRepository;
 import com.boxbox.market.round.MarketRoundService;
 import com.boxbox.market.stock.dto.MarketStockResponses;
@@ -107,21 +108,17 @@ public class MarketStockService {
                 }
                 resultBonus = bonus.intValue();
             }
-            scenarios.add(scenario(item, finishRank, finishRank, resultBonus));
+            scenarios.add(scenario(finishRank,
+                    MarketSettlementPrice.calculate(item.startingPrice(), item.baseRank(), finishRank, resultBonus)));
         }
-        scenarios.add(scenario(item, null, LAST_FINISH_RANK, 0));
+        scenarios.add(scenario(null, MarketSettlementPrice.retirement(item.startingPrice())));
         return List.copyOf(scenarios);
     }
 
     private static MarketStockResponses.SettlementScenario scenario(
-            MarketStockResponses.Item item, Integer finishRank, int rankForScore, int resultBonus) {
-        int baseRank = item.baseRank();
-        // Sum the crossed ranks, including the better rank and excluding the worse rank.
-        int positionScore = (baseRank - rankForScore) * (baseRank + rankForScore - 1) / 2;
-        int finalScore = (int) Math.clamp((long) positionScore + resultBonus, -30, 40);
-        BigInteger price = new BigDecimal(item.startingPrice()).multiply(BigDecimal.valueOf(100 + finalScore))
-                .movePointLeft(2).setScale(0, RoundingMode.HALF_UP).toBigIntegerExact();
-        return new MarketStockResponses.SettlementScenario(finishRank, positionScore, resultBonus, finalScore, price);
+            Integer finishRank, MarketSettlementPrice settlement) {
+        return new MarketStockResponses.SettlementScenario(finishRank, settlement.positionScore(),
+                settlement.resultBonus(), settlement.finalScore(), settlement.price());
     }
 
     private static ApiException invalidSettlementRules() {
