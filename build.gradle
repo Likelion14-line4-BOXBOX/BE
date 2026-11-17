@@ -24,6 +24,7 @@ dependencies {
 	implementation 'org.springframework.security:spring-security-crypto'
 	implementation 'org.springframework.security:spring-security-oauth2-jose'
 	runtimeOnly 'com.mysql:mysql-connector-j'
+	runtimeOnly 'com.twelvemonkeys.imageio:imageio-webp:3.15.3'
 
 	compileOnly 'org.projectlombok:lombok'
 	annotationProcessor 'org.projectlombok:lombok'

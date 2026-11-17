@@ -82,7 +82,7 @@ def initialize(root):
     print('Local database ready; no test accounts or race data imported')
 
 
-def app_env():
+def app_env(public_ip=None):
     values = credentials()
     config = json.loads((SETTINGS / 'config.json').read_text())
     origins = config['allowed_origins']
@@ -111,6 +111,8 @@ def app_env():
         'AUTH_EXTENDED_ACCESS_LIFETIME=' + extended_lifetime,
         'SERVER_SERVLET_SESSION_COOKIE_SECURE=true', 'SERVER_SERVLET_SESSION_COOKIE_SAME_SITE=None',
         'MARKET_PREPARATION_ENABLED=true',
+        'POST_MEDIA_DIRECTORY=/var/lib/boxbox/media/uploads',
+        'POST_MEDIA_PUBLIC_BASE_URL=' + ('https://' + str(ipaddress.IPv4Address(public_ip)) if public_ip else ''),
     ]) + '\n')
     return path
 
@@ -130,12 +132,13 @@ def healthy(name, seconds=180):
 def start(image, env_file):
     run(['docker', 'run', '-d', '--name', 'boxbox', '--restart', 'unless-stopped',
          '--network', 'boxbox', '--env-file', str(env_file), '-p', '127.0.0.1:8080:8080',
+         '--mount', 'type=volume,source=boxbox-post-media,target=/var/lib/boxbox/media',
          '--read-only', '--tmpfs', '/tmp:rw,noexec,nosuid,size=128m', '--cap-drop', 'ALL',
          '--security-opt', 'no-new-privileges', '--memory', '1024m', '--cpus', '2',
          '--log-opt', 'max-size=10m', '--log-opt', 'max-file=3', image])
 
 
-def deploy(repository, digest, revision):
+def deploy(repository, digest, revision, public_ip=None):
     if not re.fullmatch(r'\d{12}\.dkr\.ecr\.ap-northeast-2\.amazonaws\.com/[a-z0-9/_-]+', repository):
         raise RuntimeError('Invalid ECR repository')
     if not re.fullmatch(r'sha256:[a-f0-9]{64}', digest) or not re.fullmatch(r'[a-f0-9]{40}', revision):
@@ -144,7 +147,7 @@ def deploy(repository, digest, revision):
         raise RuntimeError('Operator must initialize the database first')
     image = repository + '@' + digest
     run(['docker', 'pull', image])
-    environment = app_env()
+    environment = app_env(public_ip)
     if exists('boxbox-previous'):
         run(['docker', 'rm', '--force', 'boxbox-previous'])
     previous = exists('boxbox')
@@ -237,6 +240,7 @@ def main():
     parser.add_argument('--repository')
     parser.add_argument('--digest')
     parser.add_argument('--revision')
+    parser.add_argument('--public-ip')
     args = parser.parse_args()
     HOME.mkdir(parents=True, exist_ok=True)
     SETTINGS.mkdir(parents=True, exist_ok=True)
@@ -247,7 +251,7 @@ def main():
         elif args.configure_https:
             configure_https(args.configure_https)
         else:
-            deploy(args.repository or '', args.digest or '', args.revision or '')
+            deploy(args.repository or '', args.digest or '', args.revision or '', args.public_ip)
 
 
 if __name__ == '__main__':
