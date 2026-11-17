@@ -35,7 +35,7 @@ class MarketPortfolioTest {
                 CREATE TABLE user_season_baselines (season_year INT, user_id BIGINT, starting_assets BIGINT,
                     PRIMARY KEY (season_year, user_id))
                 """);
-        jdbc.execute("CREATE TABLE ranking_snapshots (id BIGINT, season_year INT, scope VARCHAR(16), type VARCHAR(24), published_at DATETIME)");
+        jdbc.execute("CREATE TABLE ranking_snapshots (id BIGINT, season_year INT, scope VARCHAR(16), type VARCHAR(24), published_at DATETIME, status VARCHAR(16) DEFAULT 'PUBLISHED')");
         jdbc.execute("CREATE TABLE ranking_entries (snapshot_id BIGINT, user_id BIGINT, rank INT)");
 
         jdbc.update("INSERT INTO users VALUES (1, 'demo', 899995, 'ACTIVE', NULL), (2, 'other', 500, 'ACTIVE', NULL)");
@@ -44,7 +44,7 @@ class MarketPortfolioTest {
         jdbc.update("INSERT INTO drivers VALUES (3, 'Driver', 23)");
         jdbc.update("INSERT INTO teams VALUES (4, 'Team')");
         jdbc.update("INSERT INTO coin_ledger VALUES (1, 1, 'INITIAL_GRANT', '2026-11-15 00:00:00', 1000000)");
-        jdbc.update("INSERT INTO ranking_snapshots VALUES (1, 2026, 'SEASON', 'TOTAL_ASSETS', '2026-11-16 00:00:00')");
+        jdbc.update("INSERT INTO ranking_snapshots (id,season_year,scope,type,published_at) VALUES (1, 2026, 'SEASON', 'TOTAL_ASSETS', '2026-11-16 00:00:00')");
         jdbc.update("INSERT INTO ranking_entries VALUES (1, 1, 12), (1, 2, 13)");
 
         var rounds = mock(MarketRoundRepository.class);
@@ -88,6 +88,12 @@ class MarketPortfolioTest {
         var configured = service.portfolio("demo", "21", now);
         assertEquals(BigInteger.valueOf(1000000), configured.seasonStartAssets());
         assertEquals(0, new BigDecimal("0.0015").compareTo(configured.seasonReturnRate()));
+        var summary = service.summary(1, now).orElseThrow();
+        assertEquals(configured.totalAssets(), summary.totalAssets());
+        assertEquals(configured.seasonReturnRate(), summary.seasonReturnRate());
+        assertEquals(configured.seasonRank(), summary.seasonRank());
+        assertEquals(now, summary.snapshotAt());
+        assertTrue(service.summary(999, now).isEmpty());
 
         jdbc.update("INSERT INTO trade_orders VALUES (1, 1, 'FILLED', 'SELL', 10)");
         jdbc.update("INSERT INTO user_settlements VALUES (1, 1, 21, 1000000, 40, 1, 'COMPLETED', NULL)");

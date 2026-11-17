@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.boxbox.garage.overview.dto.GarageMarketSummary;
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
@@ -18,13 +19,11 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.jdbc.Sql;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @SpringBootTest(properties = {
@@ -32,22 +31,16 @@ import org.springframework.test.web.servlet.MockMvc;
         "spring.sql.init.schema-locations=classpath:db/test-schema.sql,classpath:db/chat-schema.sql,classpath:db/chat-write-schema.sql"})
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-@Import(GarageApiTests.MarketTestConfig.class)
 @Sql({"/db/garage-cleanup.sql", "/db/profile-test-data.sql", "/db/garage-test-data.sql"})
 class GarageApiTests {
     @Autowired protected MockMvc mvc;
     @Autowired protected JdbcTemplate jdbc;
     @Autowired protected GarageService garage;
-    @Autowired protected GarageMarketSummaryReader market;
-
-    @TestConfiguration(proxyBeanMethods = false)
-    static class MarketTestConfig {
-        @Bean GarageMarketSummaryReader market() { return mock(GarageMarketSummaryReader.class); }
-    }
+    @MockitoBean protected GarageMarketSummaryReader market;
 
     @BeforeEach void marketReady() {
         reset(market);
-        when(market.find(anyLong())).thenReturn(Optional.of(new GarageMarketSummary(1037000, new BigDecimal("3.7"), 12,
+        when(market.find(anyLong())).thenReturn(Optional.of(new GarageMarketSummary(BigInteger.valueOf(1037000), new BigDecimal("3.7"), 12L,
                 Instant.parse("2026-11-09T07:00:00Z"))));
     }
 
@@ -98,7 +91,7 @@ class GarageApiTests {
 
     @Test void noTradesDoesNotMeanUnavailableAndMissingRankOrDenominatorRemainsNull() throws Exception {
         long actualCash = jdbc.queryForObject("SELECT coin_balance FROM users WHERE id=1", Long.class);
-        when(market.find(1)).thenReturn(Optional.of(new GarageMarketSummary(actualCash, null, null, Instant.parse("2026-11-09T07:00:00Z"))));
+        when(market.find(1)).thenReturn(Optional.of(new GarageMarketSummary(BigInteger.valueOf(actualCash), null, null, Instant.parse("2026-11-09T07:00:00Z"))));
         mvc.perform(get("/api/users/1/garage").principal(() -> "viewer"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.marketSummary.totalAssets").value(actualCash))
                 .andExpect(jsonPath("$.data.marketSummary.returnRate").value(nullValue()))
@@ -107,7 +100,7 @@ class GarageApiTests {
     }
 
     @Test void zeroAssetsAndNegativeReturnAreValidProviderValuesAndAreNotRecalculated() {
-        var value = new GarageMarketSummary(0, new BigDecimal("-37.12345678"), null, Instant.parse("2026-11-09T07:00:00Z"));
+        var value = new GarageMarketSummary(BigInteger.ZERO, new BigDecimal("-37.12345678"), null, Instant.parse("2026-11-09T07:00:00Z"));
         when(market.find(1)).thenReturn(Optional.of(value));
         assertThat(garage.get("viewer", "1", Map.of()).marketSummary()).isEqualTo(value);
     }

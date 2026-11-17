@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import com.boxbox.garage.overview.dto.GarageMarketSummary;
+import java.math.BigInteger;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
@@ -24,7 +25,8 @@ class GarageMySqlTests extends GarageApiTests {
 
     @DynamicPropertySource
     static void mysqlProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", () -> "jdbc:mysql://127.0.0.1:13306/boxbox_garage_verify?connectionTimeZone=UTC&characterEncoding=UTF-8");
+        registry.add("spring.datasource.url", () -> System.getenv().getOrDefault("GARAGE_MYSQL_URL",
+                "jdbc:mysql://127.0.0.1:13306/boxbox_garage_verify?connectionTimeZone=UTC&characterEncoding=UTF-8"));
         registry.add("spring.datasource.username", () -> System.getenv().getOrDefault("GARAGE_MYSQL_USER", "root"));
         registry.add("spring.datasource.password", () -> System.getenv().getOrDefault("GARAGE_MYSQL_PASSWORD", ""));
         registry.add("spring.sql.init.mode", () -> "never");
@@ -32,7 +34,7 @@ class GarageMySqlTests extends GarageApiTests {
 
     @Test void profilePrivacyAndStampReadsUseOneSnapshotAndNextRequestObservesCommit() throws Exception {
         var queried = new CountDownLatch(1); var release = new CountDownLatch(1);
-        var summary = new GarageMarketSummary(500, null, null, Instant.parse("2026-11-09T07:00:00Z"));
+        var summary = new GarageMarketSummary(BigInteger.valueOf(500), null, null, Instant.parse("2026-11-09T07:00:00Z"));
         when(market.find(2)).thenAnswer(invocation -> {
             queried.countDown();
             if (!release.await(5, TimeUnit.SECONDS)) throw new IllegalStateException("reader release timeout");
