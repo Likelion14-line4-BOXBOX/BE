@@ -132,7 +132,7 @@ class MarketRoundRepositoryTest {
     }
 
     @Test
-    void prefersOpenRoundUntilExclusiveCloseThenSelectsNextScheduledRound() {
+    void keepsClosedRoundUntilSettlementIsPublicAndNextRoundOpens() {
         addRound(1, 2026, "OPEN", "2026-11-16 00:00:00", "2026-11-17 00:00:00");
         addRound(2, 2026, "SCHEDULED", "2026-11-18 00:00:00", "2026-11-20 00:00:00");
         addRound(3, 2026, "SCHEDULED", "2026-11-21 00:00:00", "2026-11-22 00:00:00");
@@ -145,7 +145,18 @@ class MarketRoundRepositoryTest {
         assertEquals("50", open.chatRoomId());
         assertEquals(Instant.parse("2026-11-16T00:00:00Z"), open.openAt());
 
-        var upcoming = repository.current(2026, Instant.parse("2026-11-17T00:00:00Z")).orElseThrow();
+        jdbc.update("UPDATE market_rounds SET status = 'CLOSED' WHERE id = 1");
+        assertEquals("1", repository.current(2026, Instant.parse("2026-11-17T00:00:00Z")).orElseThrow().id());
+        jdbc.update("""
+                UPDATE market_rounds SET status = 'OPEN' WHERE id = 2
+                """);
+        assertEquals("1", repository.current(2026, Instant.parse("2026-11-18T00:00:00Z")).orElseThrow().id());
+        jdbc.update("""
+                UPDATE market_rounds SET settlement_status = 'COMPLETED', publish_at = '2026-11-18 01:00:00'
+                WHERE id = 1
+                """);
+        assertEquals("1", repository.current(2026, Instant.parse("2026-11-18T00:59:59Z")).orElseThrow().id());
+        var upcoming = repository.current(2026, Instant.parse("2026-11-18T01:00:00Z")).orElseThrow();
         assertEquals("2", upcoming.id());
         assertNull(upcoming.chatRoomId());
     }
@@ -324,6 +335,15 @@ class MarketRoundRepositoryTest {
         assertEquals(200, sold.status());
         assertEquals(2, sold.body().path("data").path("holdingQuantity").intValue());
         assertEquals(4, jdbc.queryForObject("SELECT COUNT(*) FROM stock_price_candles WHERE volume = 4", Integer.class));
+
+        var beforeClose = service.create("demo", "1", sellBody, now);
+        jdbc.update("UPDATE market_rounds SET close_at = ? WHERE id = 1",
+                java.time.LocalDateTime.ofInstant(now.plusSeconds(1), ZoneOffset.UTC));
+        var closed = executions.execute("demo", "1", UUID.randomUUID().toString(),
+                json.createObjectNode().put("quoteId", beforeClose.quoteId()));
+        assertEquals(409, closed.status());
+        assertEquals("MARKET_CLOSED", closed.body().path("error").path("code").stringValue());
+        assertEquals(2, jdbc.queryForObject("SELECT COUNT(*) FROM coin_ledger", Integer.class));
     }
 
     private void addStockFixtures() {

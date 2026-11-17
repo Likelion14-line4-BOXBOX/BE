@@ -33,11 +33,22 @@ public class MarketRoundRepository {
         return jdbc.query("SELECT " + ROUND_COLUMNS + ROUND_TABLES + """
                 WHERE m.season_year = :season
                   AND m.status <> 'CANCELLED' AND r.status <> 'CANCELLED'
-                  AND m.open_at IS NOT NULL AND m.publish_at IS NOT NULL
+                  AND m.open_at IS NOT NULL
                 ORDER BY CASE
-                             WHEN m.status = 'OPEN' AND m.open_at <= :now AND m.close_at > :now THEN 0
-                             WHEN m.status IN ('SCHEDULED', 'OPEN') AND m.open_at > :now THEN 1
-                             ELSE 2
+                             WHEN m.status IN ('OPEN', 'CLOSED') AND m.close_at <= :now
+                               AND (m.publish_at IS NULL OR m.publish_at > :now
+                                 OR COALESCE(m.settlement_status, '') NOT IN ('COMPLETED', 'PUBLISHED'))
+                               AND NOT EXISTS (
+                                   SELECT 1 FROM market_rounds newer
+                                   JOIN races nr ON nr.id = newer.race_id AND nr.season_year = newer.season_year
+                                   WHERE newer.season_year = m.season_year
+                                     AND newer.status IN ('OPEN', 'CLOSED') AND nr.status <> 'CANCELLED'
+                                     AND newer.close_at <= :now AND nr.round_number > r.round_number
+                               ) THEN 0
+                             WHEN m.status = 'OPEN' AND m.open_at <= :now AND m.close_at > :now THEN 1
+                             WHEN m.status IN ('OPEN', 'CLOSED') AND m.close_at <= :now THEN 2
+                             WHEN m.status IN ('SCHEDULED', 'OPEN') AND m.open_at > :now THEN 3
+                             ELSE 4
                          END,
                          CASE WHEN m.open_at > :now THEN m.open_at END,
                          m.open_at DESC, m.id DESC
