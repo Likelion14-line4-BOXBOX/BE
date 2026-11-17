@@ -85,6 +85,32 @@ class DeployTests(unittest.TestCase):
 
 
 class InitializationTests(unittest.TestCase):
+    def test_extended_access_requires_existing_active_users_and_persists_only_selected_ids(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(runtime, 'SETTINGS', Path(directory)), \
+             patch.object(runtime, 'credentials', return_value={'db_password': 'test', 'jwt': 'test'}), \
+             patch.object(runtime, 'mysql', return_value='42'):
+            (Path(directory) / 'config.json').write_text(json.dumps({
+                'allowed_origins': 'http://localhost:5173',
+                'extended_access_user_ids': [42], 'extended_access_lifetime': 'P10D'}))
+            environment = runtime.app_env().read_text()
+            self.assertIn('AUTH_EXTENDED_ACCESS_USER_IDS=42\n', environment)
+            self.assertIn('AUTH_EXTENDED_ACCESS_LIFETIME=P10D\n', environment)
+    def test_unknown_extended_access_user_refuses_app_environment(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(runtime, 'SETTINGS', Path(directory)), \
+             patch.object(runtime, 'credentials', return_value={}), patch.object(runtime, 'mysql', return_value=''):
+            (Path(directory) / 'config.json').write_text(json.dumps({
+                'allowed_origins': 'http://localhost:5173', 'extended_access_user_ids': [42]}))
+            with self.assertRaisesRegex(RuntimeError, 'existing active'):
+                runtime.app_env()
+            self.assertFalse((Path(directory) / 'app.env').exists())
+    def test_default_environment_does_not_enable_extended_access(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(runtime, 'SETTINGS', Path(directory)), \
+             patch.object(runtime, 'credentials', return_value={'db_password': 'test', 'jwt': 'test'}), \
+             patch.object(runtime, 'mysql') as sql:
+            (Path(directory) / 'config.json').write_text('{"allowed_origins":"http://localhost:5173"}')
+            self.assertIn('AUTH_EXTENDED_ACCESS_USER_IDS=\n', runtime.app_env().read_text())
+            sql.assert_not_called()
+
     def test_partial_schema_does_not_run_ddl_or_seed(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

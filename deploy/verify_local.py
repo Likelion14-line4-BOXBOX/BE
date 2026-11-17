@@ -57,6 +57,7 @@ def verify(image, mysql_image):
                 "DB_URL=jdbc:mysql://" + database + ":3306/boxbox?connectionTimeZone=UTC&sslMode=DISABLED&allowPublicKeyRetrieval=true",
                 "DB_USERNAME=boxbox", "DB_PASSWORD=" + password,
                 "AUTH_JWT_SECRET=" + signing_key,
+                "AUTH_EXTENDED_ACCESS_USER_IDS=1", "AUTH_EXTENDED_ACCESS_LIFETIME=P10D",
                 "AUTH_ALLOWED_ORIGINS=http://localhost:5173", "AUTH_COOKIE_SAME_SITE=None",
                 "SERVER_SERVLET_SESSION_COOKIE_SECURE=true", "SERVER_SERVLET_SESSION_COOKIE_SAME_SITE=None",
                 "MARKET_PREPARATION_ENABLED=false",
@@ -114,6 +115,12 @@ def verify(image, mysql_image):
             login = {"loginId": "verify46", "password": secrets.token_hex(12)}
             request("signup", "/api/auth/signup", 201, body={**login, "nickname": "배포검증"})
             token, headers = request("login", "/api/auth/login", body=login)
+            assert token["data"]["expiresIn"] == 864000
+            request("ordinary account signup", "/api/auth/signup", 201,
+                    body={"loginId": "ordinary46", "password": password, "nickname": "normal46"})
+            ordinary, _ = request("ordinary account remains 15 minutes", "/api/auth/login",
+                                  body={"loginId": "ordinary46", "password": password})
+            assert ordinary["data"]["expiresIn"] == 900
             cookie = headers["Set-Cookie"]
             assert "Secure" in cookie and "HttpOnly" in cookie and "SameSite=None" in cookie
             bearer = {"Authorization": "Bearer " + token["data"]["accessToken"]}
@@ -121,6 +128,7 @@ def verify(image, mysql_image):
             request("wrong password", "/api/auth/login", 401, body={**login, "password": "incorrect"})
             refreshed, headers = request("refresh", "/api/auth/refresh", method="POST", headers={
                 "Origin": "http://localhost:5173", "Cookie": cookie.split(";", 1)[0]})
+            assert refreshed["data"]["expiresIn"] == 864000
             bearer = {"Authorization": "Bearer " + refreshed["data"]["accessToken"]}
             cookie = headers["Set-Cookie"].split(";", 1)[0]
             request("missing SSE room JSON error", "/api/chat-rooms/999999/events", 404,
@@ -152,7 +160,7 @@ def verify(image, mysql_image):
             assert sql("SELECT COUNT(*) FROM chat_participants WHERE stamp_recorded_at IS NOT NULL;") == "1"
             checks.append({"name": "SSE participation stamp persisted", "status": "DB match"})
             assert sql("SELECT coin_balance FROM users WHERE login_id='verify46';") == "1000000"
-            assert sql("SELECT COUNT(*) FROM coin_ledger WHERE entry_type='INITIAL_GRANT';") == "1"
+            assert sql("SELECT COUNT(*) FROM coin_ledger l JOIN users u ON u.id=l.user_id WHERE entry_type='INITIAL_GRANT' AND login_id='verify46';") == "1"
             checks.append({"name": "signup balance and initial grant", "status": "DB match"})
             run("docker", "restart", app)
             ready()
