@@ -1,5 +1,6 @@
 package com.boxbox.market.preparation;
 
+import com.boxbox.market.event.MarketEventLog;
 import com.boxbox.market.preparation.MarketRaceScheduleService.TradingWindow;
 import java.math.BigDecimal;
 import java.security.SecureRandom;
@@ -25,20 +26,31 @@ class MarketRoundPreparationRepository {
 
     @Transactional
     public void advanceRounds(int season, Instant now) {
-        var parameters = Map.of("season", season, "now", utc(now));
-        jdbc.update("""
-                UPDATE market_rounds
-                SET status = 'CLOSED', status_version = status_version + 1, updated_at = :now
-                WHERE season_year = :season AND status IN ('SCHEDULED', 'OPEN') AND close_at <= :now
-                """, parameters);
-        jdbc.update("""
-                UPDATE market_rounds
-                SET status = 'OPEN', status_version = status_version + 1, updated_at = :now
-                WHERE season_year = :season AND status = 'SCHEDULED'
-                  AND open_at <= :now AND close_at > :now
-                  AND EXISTS (SELECT 1 FROM races r WHERE r.id = market_rounds.race_id AND r.status <> 'CANCELLED')
-                """, parameters);
+        var when = utc(now);
+        var parameters = Map.of("season", season, "now", when);
+        var transitions = jdbc.query("""
+                SELECT m.id, CASE WHEN m.close_at <= :now THEN 'CLOSED' ELSE 'OPEN' END AS next_status
+                FROM market_rounds m JOIN races r ON r.id = m.race_id AND r.season_year = m.season_year
+                WHERE m.season_year = :season AND r.status <> 'CANCELLED'
+                  AND ((m.status IN ('SCHEDULED', 'OPEN') AND m.close_at <= :now)
+                    OR (m.status = 'SCHEDULED' AND m.open_at <= :now AND m.close_at > :now))
+                ORDER BY m.id FOR UPDATE
+                """, parameters, (row, index) -> new Transition(row.getBigDecimal("id"), row.getString("next_status")));
+        var template = jdbc.getJdbcTemplate();
+        for (var transition : transitions) {
+            template.update("""
+                    UPDATE market_rounds SET status = ?, status_version = status_version + 1, updated_at = ?
+                    WHERE id = ?
+                    """, transition.status(), when, transition.id());
+            var version = template.queryForObject("SELECT status_version FROM market_rounds WHERE id = ?",
+                    BigDecimal.class, transition.id());
+            MarketEventLog.append(template, transition.id(), "ROUND_STATUS_UPDATED", Map.of(
+                    "roundId", transition.id().toPlainString(), "status", transition.status(),
+                    "statusVersion", version), when);
+        }
     }
+
+    private record Transition(BigDecimal id, String status) {}
 
     Optional<Integer> nextUnpreparedRound(int season, Instant now) {
         return jdbc.query("""
