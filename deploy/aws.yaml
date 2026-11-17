@@ -31,8 +31,9 @@ Resources:
           - {FromPort: 443, ToPort: 443, Protocol: tcp, Cidrs: [0.0.0.0/0]}
       Tags: [{Key: Project, Value: BOXBOX}, {Key: Purpose, Value: one-week-demo}]
       UserData: !Sub |
-        #!/bin/bash
-        set -euo pipefail
+        #!/bin/sh
+        # Lightsail prepends its own /bin/sh script, so this must remain POSIX.
+        set -eu
         export DEBIAN_FRONTEND=noninteractive
         apt-get update
         apt-get install -y docker.io python3 curl ca-certificates
