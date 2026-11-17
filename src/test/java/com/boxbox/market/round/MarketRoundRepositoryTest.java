@@ -96,6 +96,7 @@ class MarketRoundRepositoryTest {
                 """
                 {"resultBonusByRank":[8,0,0,0,0,0,0,0,0]}
                 """);
+        jdbc.update("UPDATE market_stocks SET base_rank = 22 WHERE id = 2");
         var detail = service.detail("1", "1", close);
         assertEquals("1", detail.driver().driverId());
         assertFalse(detail.tradable());
@@ -106,7 +107,7 @@ class MarketRoundRepositoryTest {
         assertEquals(109, win.settlementPrice().intValueExact());
         var retirement = detail.settlementScenarios().getLast();
         assertNull(retirement.finishRank());
-        assertEquals(-30, retirement.positionScore());
+        assertEquals(-230, retirement.positionScore());
         assertEquals(0, retirement.resultBonus());
         assertEquals(-30, retirement.finalScore());
         assertEquals(70, retirement.settlementPrice().intValueExact());
@@ -115,16 +116,16 @@ class MarketRoundRepositoryTest {
         var middle = service.detail("1", "1", start).settlementScenarios();
         assertEquals(List.of(3, 5, 6, 9),
                 middle.subList(0, 4).stream().map(scenario -> scenario.finishRank()).toList());
-        assertEquals(-30, middle.getLast().positionScore());
+        assertEquals(-216, middle.getLast().positionScore());
 
         jdbc.update("UPDATE market_stocks SET base_rank = 21 WHERE id = 1");
         var bottom = service.detail("1", "1", start).settlementScenarios();
         assertEquals(List.of(18, 19, 20, 21),
                 bottom.subList(0, 4).stream().map(scenario -> scenario.finishRank()).toList());
-        assertEquals(-30, bottom.getLast().finalScore());
+        assertEquals(-21, bottom.getLast().finalScore());
 
         jdbc.update("UPDATE market_stocks SET base_rank = 22 WHERE id = 1");
-        assertEquals(-30, service.detail("1", "1", start).settlementScenarios().getLast().finalScore());
+        assertEquals(0, service.detail("1", "1", start).settlementScenarios().getLast().finalScore());
         assertEquals("STOCK_NOT_FOUND", assertThrows(ApiException.class,
                 () -> service.detail("1", "1", start.minusNanos(1))).getCode());
         assertEquals("STOCK_NOT_FOUND", assertThrows(ApiException.class,

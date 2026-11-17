@@ -4,7 +4,8 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 10001 boxbox \
-    && useradd --uid 10001 --gid boxbox --no-create-home boxbox
+    && useradd --uid 10001 --gid boxbox --no-create-home boxbox \
+    && install -d -o 10001 -g 10001 /var/lib/boxbox/media/uploads
 
 WORKDIR /app
 COPY --chown=boxbox:boxbox build/docker/app.jar /app/app.jar
