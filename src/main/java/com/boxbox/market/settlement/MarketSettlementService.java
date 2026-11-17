@@ -55,18 +55,15 @@ class MarketSettlementService {
             throw new ApiException(HttpStatus.CONFLICT, "SETTLEMENT_NOT_PUBLISHED", "아직 정산 결과가 공개되지 않았습니다.");
         }
 
-        String ruleVersion = detail.ruleVersion();
-        if (detail.ruleSnapshot() != null) {
-            var version = json.readTree(detail.ruleSnapshot()).path("ruleVersion");
-            if (version.isString() && !version.stringValue().isBlank()) {
-                ruleVersion = version.stringValue();
-            }
-        }
+        var snapshot = detail.ruleSnapshot() == null ? json.createObjectNode() : json.readTree(detail.ruleSnapshot());
+        var version = snapshot.path("ruleVersion");
+        String ruleVersion = version.isString() && !version.stringValue().isBlank()
+                ? version.stringValue() : detail.ruleVersion();
         return new MarketSettlementDetailResponse(detail.roundId(), "PUBLISHED", ruleVersion, detail.version(),
                 detail.roundStartAssets(), detail.endingAssets(), detail.roundPnl(),
                 detail.roundStartAssets().signum() == 0 ? null : detail.returnRate(), detail.rank(),
                 detail.seasonRank(), detail.seasonReturnRate(), detail.settlementProceeds(),
-                repository.findItems(detail), detail.publishedAt());
+                repository.findItems(detail, snapshot.path("driverNames")), detail.publishedAt());
     }
 
     private static ApiException settlementNotFound() {

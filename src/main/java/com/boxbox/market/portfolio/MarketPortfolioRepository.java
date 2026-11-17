@@ -10,6 +10,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -51,14 +52,17 @@ class MarketPortfolioRepository {
         }, new BigDecimal(userId), new BigDecimal(roundId));
     }
 
-    Settlement settlement(BigInteger userId, BigInteger roundId) {
+    Settlement settlement(BigInteger userId, BigInteger roundId, Instant now) {
         return jdbc.query("""
-                SELECT round_start_assets, CASE WHEN completed_at IS NOT NULL THEN settlement_pnl END AS settlement_pnl
+                SELECT round_start_assets,
+                       CASE WHEN status IN ('PUBLISHED', 'COMPLETED') AND published_at <= ?
+                            THEN settlement_pnl END AS settlement_pnl
                 FROM user_settlements
                 WHERE user_id = ? AND round_id = ?
                 ORDER BY settlement_version DESC, id DESC LIMIT 1
                 """, (row, index) -> new Settlement(number(row, "round_start_assets"), number(row, "settlement_pnl")),
-                new BigDecimal(userId), new BigDecimal(roundId)).stream().findFirst().orElse(new Settlement(null, null));
+                LocalDateTime.ofInstant(now, ZoneOffset.UTC), new BigDecimal(userId), new BigDecimal(roundId))
+                .stream().findFirst().orElse(new Settlement(null, null));
     }
 
     BigInteger realizedSales(BigInteger userId, BigInteger roundId) {
@@ -88,14 +92,10 @@ class MarketPortfolioRepository {
 
     BigInteger seasonStartingAssets(BigInteger userId, int season) {
         return jdbc.query("""
-                SELECT u.round_start_assets FROM user_settlements u
-                JOIN market_rounds m ON m.id = u.round_id
-                JOIN races r ON r.id = m.race_id AND r.season_year = m.season_year
-                WHERE u.user_id = ? AND m.season_year = ? AND r.round_number = 1
-                  AND u.round_start_assets IS NOT NULL
-                ORDER BY u.settlement_version DESC, u.id DESC LIMIT 1
-                """, (row, index) -> number(row, "round_start_assets"), new BigDecimal(userId), season)
-                .stream().findFirst().orElse(null);
+                SELECT starting_assets FROM user_season_baselines
+                WHERE user_id = ? AND season_year = ?
+                """, (row, index) -> number(row, "starting_assets"), new BigDecimal(userId), season)
+                .stream().filter(Objects::nonNull).findFirst().orElse(null);
     }
 
     Long seasonRank(BigInteger userId, int season, Instant now) {

@@ -75,7 +75,7 @@ class MarketSettlementTest {
         jdbc.execute("ALTER TABLE user_settlements ADD season_return_rate DECIMAL(20,8)");
         jdbc.update("UPDATE user_settlements SET rule_snapshot = ?, season_rank = 10 WHERE id = 3",
                 """
-                {"ruleVersion":"frozen-rule"}
+                {"ruleVersion":"frozen-rule","driverNames":{"1":"Driver at settlement"}}
                 """);
         jdbc.execute("CREATE TABLE market_stocks (id BIGINT, round_id BIGINT, driver_id BIGINT)");
         jdbc.execute("CREATE TABLE drivers (id BIGINT, name VARCHAR(100))");
@@ -100,7 +100,11 @@ class MarketSettlementTest {
         assertEquals(10L, detail.seasonRank());
         assertEquals(1, detail.items().size());
         var item = detail.items().getFirst();
-        assertEquals("Driver A", item.driverName());
+        assertEquals("Driver at settlement", item.driverName());
+        jdbc.update("UPDATE drivers SET name = 'Renamed Driver' WHERE id = 1");
+        assertEquals("Driver at settlement", service.detail("demo", "21", now).items().getFirst().driverName());
+        jdbc.update("UPDATE user_settlements SET rule_snapshot = NULL WHERE id = 3");
+        assertEquals("Renamed Driver", service.detail("demo", "21", now).items().getFirst().driverName());
         assertNull(item.finishRank());
         assertEquals(BigInteger.valueOf(18), item.settlementPrice());
         assertEquals(BigInteger.valueOf(4), item.settlementPnl());

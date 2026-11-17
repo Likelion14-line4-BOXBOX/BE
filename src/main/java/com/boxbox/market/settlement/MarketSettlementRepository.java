@@ -14,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
+import tools.jackson.databind.JsonNode;
 
 @Repository
 @RequiredArgsConstructor
@@ -86,7 +87,7 @@ class MarketSettlementRepository {
                 }).stream().findFirst();
     }
 
-    List<Item> findItems(Detail detail) {
+    List<Item> findItems(Detail detail, JsonNode driverNames) {
         return jdbc.query("""
                 SELECT s.driver_id, d.name AS driver_name, i.base_rank, i.finish_rank,
                        i.position_score, i.result_bonus, i.final_score, i.starting_price,
@@ -100,11 +101,18 @@ class MarketSettlementRepository {
                 """, new MapSqlParameterSource("settlementId", new BigDecimal(detail.settlementId()))
                 .addValue("userId", new BigDecimal(detail.userId())).addValue("version", detail.version())
                 .addValue("roundId", new BigDecimal(detail.roundId())),
-                (row, index) -> new Item(row.getString("driver_id"), row.getString("driver_name"),
-                        row.getInt("base_rank"), row.getObject("finish_rank", Integer.class),
-                        row.getInt("position_score"), row.getInt("result_bonus"), row.getInt("final_score"),
-                        integer(row, "starting_price"), integer(row, "settlement_price"), integer(row, "quantity"),
-                        integer(row, "total_cost"), integer(row, "proceeds"), integer(row, "pnl")));
+                (row, index) -> {
+                    String driverId = row.getString("driver_id");
+                    // New settlements freeze names by driver ID in rule_snapshot.driverNames.
+                    JsonNode frozenName = driverNames.path(driverId);
+                    String name = frozenName.isString() && !frozenName.stringValue().isBlank()
+                            ? frozenName.stringValue() : row.getString("driver_name");
+                    return new Item(driverId, name, row.getInt("base_rank"),
+                            row.getObject("finish_rank", Integer.class), row.getInt("position_score"),
+                            row.getInt("result_bonus"), row.getInt("final_score"), integer(row, "starting_price"),
+                            integer(row, "settlement_price"), integer(row, "quantity"), integer(row, "total_cost"),
+                            integer(row, "proceeds"), integer(row, "pnl"));
+                });
     }
 
     record Detail(BigInteger userId, BigInteger settlementId, String roundId, String status, long version,

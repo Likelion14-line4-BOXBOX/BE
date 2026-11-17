@@ -30,9 +30,11 @@ class MarketPortfolioTest {
         jdbc.execute("CREATE TABLE teams (id BIGINT, name VARCHAR(100))");
         jdbc.execute("CREATE TABLE trade_orders (user_id BIGINT, stock_id BIGINT, status VARCHAR(16), type VARCHAR(16), realized_pnl BIGINT)");
         jdbc.execute("CREATE TABLE coin_ledger (id BIGINT, user_id BIGINT, entry_type VARCHAR(24), created_at DATETIME, balance_after BIGINT)");
-        jdbc.execute("CREATE TABLE user_settlements (id BIGINT, user_id BIGINT, round_id BIGINT, round_start_assets BIGINT, settlement_pnl BIGINT, settlement_version INT, completed_at DATETIME)");
-        jdbc.execute("CREATE TABLE market_rounds (id BIGINT, race_id BIGINT, season_year INT)");
-        jdbc.execute("CREATE TABLE races (id BIGINT, season_year INT, round_number INT)");
+        jdbc.execute("CREATE TABLE user_settlements (id BIGINT, user_id BIGINT, round_id BIGINT, round_start_assets BIGINT, settlement_pnl BIGINT, settlement_version INT, status VARCHAR(16), published_at DATETIME(6))");
+        jdbc.execute("""
+                CREATE TABLE user_season_baselines (season_year INT, user_id BIGINT, starting_assets BIGINT,
+                    PRIMARY KEY (season_year, user_id))
+                """);
         jdbc.execute("CREATE TABLE ranking_snapshots (id BIGINT, season_year INT, scope VARCHAR(16), type VARCHAR(24), published_at DATETIME)");
         jdbc.execute("CREATE TABLE ranking_entries (snapshot_id BIGINT, user_id BIGINT, rank INT)");
 
@@ -71,10 +73,31 @@ class MarketPortfolioTest {
         assertEquals(0, new BigDecimal("50002.5").compareTo(result.positions().getFirst().averageBuyPrice()));
         assertNull(result.seasonStartAssets());
 
-        jdbc.update("INSERT INTO market_rounds VALUES (1, 1, 2026)");
-        jdbc.update("INSERT INTO races VALUES (1, 2026, 1)");
-        jdbc.update("INSERT INTO user_settlements VALUES (1, 1, 1, 900000, NULL, 1, NULL)");
-        assertEquals(BigInteger.valueOf(900000), service.portfolio("demo", "21", now).seasonStartAssets());
+        assertNull(result.seasonReturnRate());
+        jdbc.update("INSERT INTO user_season_baselines VALUES (2025, 1, 500000), (2026, 2, 500000), (2026, 1, NULL)");
+        var missing = service.portfolio("demo", "21", now);
+        assertNull(missing.seasonStartAssets());
+        assertNull(missing.seasonReturnRate());
+
+        jdbc.update("UPDATE user_season_baselines SET starting_assets = 0 WHERE season_year = 2026 AND user_id = 1");
+        var zero = service.portfolio("demo", "21", now);
+        assertEquals(BigInteger.ZERO, zero.seasonStartAssets());
+        assertNull(zero.seasonReturnRate());
+
+        jdbc.update("UPDATE user_season_baselines SET starting_assets = 1000000 WHERE season_year = 2026 AND user_id = 1");
+        var configured = service.portfolio("demo", "21", now);
+        assertEquals(BigInteger.valueOf(1000000), configured.seasonStartAssets());
+        assertEquals(0, new BigDecimal("0.0015").compareTo(configured.seasonReturnRate()));
+
+        jdbc.update("INSERT INTO trade_orders VALUES (1, 1, 'FILLED', 'SELL', 10)");
+        jdbc.update("INSERT INTO user_settlements VALUES (1, 1, 21, 1000000, 40, 1, 'COMPLETED', NULL)");
+        assertEquals(BigInteger.TEN, service.portfolio("demo", "21", now).realizedPnl());
+        jdbc.update("UPDATE user_settlements SET published_at = '2026-11-16 00:02:00' WHERE id = 1");
+        assertEquals(BigInteger.TEN, service.portfolio("demo", "21", now).realizedPnl());
+        jdbc.update("UPDATE user_settlements SET published_at = '2026-11-16 00:01:00' WHERE id = 1");
+        assertEquals(BigInteger.valueOf(50), service.portfolio("demo", "21", now).realizedPnl());
+        jdbc.update("UPDATE user_settlements SET status = 'FAILED' WHERE id = 1");
+        assertEquals(BigInteger.TEN, service.portfolio("demo", "21", now).realizedPnl());
 
         var guest = service.portfolio(null, "21", now);
         assertEquals(BigInteger.ZERO, guest.cashBalance());

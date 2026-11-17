@@ -39,7 +39,7 @@ class MarketPortfolioService {
         var positions = repository.positions(account.id(), id).stream().map(MarketPortfolioService::position).toList();
         var stockValue = positions.stream().map(Position::valuation).reduce(BigInteger.ZERO, BigInteger::add);
         var unrealized = positions.stream().map(Position::unrealizedPnl).reduce(BigInteger.ZERO, BigInteger::add);
-        var settlement = repository.settlement(account.id(), id);
+        var settlement = repository.settlement(account.id(), id, now);
         var starting = settlement.startingAssets() != null
                 ? settlement.startingAssets() : repository.openingBalance(account.id(), round.openAt(), now);
         var realized = repository.realizedSales(account.id(), id);
