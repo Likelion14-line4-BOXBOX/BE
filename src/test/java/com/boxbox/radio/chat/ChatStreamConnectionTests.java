@@ -45,7 +45,7 @@ class ChatStreamConnectionTests {
             hub.start(1, null, new ChatStreamService.Open(0, null), "session", a);
             assertThatThrownBy(() -> hub.start(1, "viewer", new ChatStreamService.Open(0, "user:1"), null, new RecordingEmitter()))
                     .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.getCode()).isEqualTo("CHAT_STREAM_BUSY"));
-            verify(service, never()).participate(anyLong(), nullable(String.class));
+            verify(service, never()).participate(anyLong(), nullable(String.class), any(BooleanSupplier.class));
             assertThat(count()).isEqualTo(1);
             a.completion.run();
             var b = new RecordingEmitter();
@@ -107,6 +107,37 @@ class ChatStreamConnectionTests {
         var emitter = new RecordingEmitter();
         try {
             hub.start(1, "viewer", new ChatStreamService.Open(0, "user:1"), null, emitter);
+            await(() -> emitter.completed.get() == 1);
+            assertThat(String.join("", emitter.parts)).contains("AUTH_REQUIRED");
+            assertThat(count()).isZero();
+        } finally { hub.shutdown(); }
+    }
+
+    @Test void credentialsExpiringDuringPollCannotReceiveReadyOrEarnStamp() throws Exception {
+        var hub = hub(1, 1000);
+        var valid = new java.util.concurrent.atomic.AtomicBoolean(true);
+        when(service.poll(1, 0, "viewer")).thenAnswer(call -> {
+            valid.set(false);
+            return new ChatStreamService.Batch(List.of(), 0, ChatRoomState.LIVE, false);
+        });
+        var emitter = new RecordingEmitter();
+        try {
+            hub.start(1, "viewer", new ChatStreamService.Open(0, "user:1"), null, emitter, valid::get);
+            await(() -> emitter.completed.get() == 1);
+            assertThat(String.join("", emitter.parts)).contains("AUTH_REQUIRED").doesNotContain("STREAM_READY");
+            verify(service, never()).participate(anyLong(), nullable(String.class), any(BooleanSupplier.class));
+            assertThat(count()).isZero();
+        } finally { hub.shutdown(); }
+    }
+
+    @Test void tokenExpiringAfterReadyEndsConnectionAndReleasesPresence() throws Exception {
+        var hub = hub(1, 1000);
+        var valid = new java.util.concurrent.atomic.AtomicBoolean(true);
+        var emitter = new RecordingEmitter();
+        try {
+            hub.start(1, "viewer", new ChatStreamService.Open(0, "user:1"), null, emitter, valid::get);
+            await(() -> String.join("", emitter.parts).contains("STREAM_READY"));
+            valid.set(false);
             await(() -> emitter.completed.get() == 1);
             assertThat(String.join("", emitter.parts)).contains("AUTH_REQUIRED");
             assertThat(count()).isZero();

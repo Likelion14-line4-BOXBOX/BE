@@ -13,6 +13,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BooleanSupplier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -50,17 +51,26 @@ class ChatStreamHub {
     }
 
     SseEmitter subscribe(long roomId, String lastEventId, String loginId, String anonymousIdentity) {
+        return subscribe(roomId, lastEventId, loginId, anonymousIdentity, () -> true);
+    }
+
+    SseEmitter subscribe(long roomId, String lastEventId, String loginId, String anonymousIdentity, BooleanSupplier credentialsValid) {
+        if (!credentialsValid.getAsBoolean()) throw ApiException.unauthorized();
         var open = service.open(roomId, lastEventId, loginId);
-        return start(roomId, loginId, open, anonymousIdentity, new SseEmitter(lifetime.toMillis()));
+        return start(roomId, loginId, open, anonymousIdentity, new SseEmitter(lifetime.toMillis()), credentialsValid);
     }
 
     SseEmitter start(long roomId, String loginId, ChatStreamService.Open open, String anonymousIdentity, SseEmitter emitter) {
+        return start(roomId, loginId, open, anonymousIdentity, emitter, () -> true);
+    }
+
+    SseEmitter start(long roomId, String loginId, ChatStreamService.Open open, String anonymousIdentity, SseEmitter emitter, BooleanSupplier credentialsValid) {
         if (stopped.get() || !slots.tryAcquire()) throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "CHAT_STREAM_BUSY", "잠시 후 다시 연결해 주세요.");
         Client client;
         try {
             String identity = open.identity() == null ? "anonymous:" + anonymousIdentity : open.identity();
             if (open.identity() == null && (anonymousIdentity == null || anonymousIdentity.isBlank())) throw new IllegalArgumentException("익명 세션 식별자가 필요합니다.");
-            client = new Client(roomId, loginId, open.sequence(), emitter, presence.connect(roomId, identity));
+            client = new Client(roomId, loginId, open.sequence(), emitter, presence.connect(roomId, identity), credentialsValid);
         } catch (RuntimeException error) { slots.release(); throw error; }
         clients.add(client);
         emitter.onCompletion(client::release);
@@ -85,16 +95,18 @@ class ChatStreamHub {
         private final String loginId;
         private final SseEmitter emitter;
         private final ChatPresenceRegistry.Connection connection;
+        private final BooleanSupplier credentialsValid;
         private final AtomicBoolean closed = new AtomicBoolean();
         private volatile Thread thread;
         private long sequence;
 
-        Client(long roomId, String loginId, long sequence, SseEmitter emitter, ChatPresenceRegistry.Connection connection) {
+        Client(long roomId, String loginId, long sequence, SseEmitter emitter, ChatPresenceRegistry.Connection connection, BooleanSupplier credentialsValid) {
             this.roomId = roomId;
             this.loginId = loginId;
             this.sequence = sequence;
             this.emitter = emitter;
             this.connection = connection;
+            this.credentialsValid = credentialsValid;
         }
 
         @Override public void run() {
@@ -108,12 +120,14 @@ class ChatStreamHub {
                 if (closed.get()) return;
                 emitter.send(SseEmitter.event().comment("connected").reconnectTime(3000));
                 while (!closed.get() && !Thread.currentThread().isInterrupted()) {
+                    if (!credentialsValid.getAsBoolean()) throw ApiException.unauthorized();
                     if (System.nanoTime() - started >= lifetime.toNanos()) {
                         control("RECONNECT_REQUIRED", Map.of("roomId", Long.toString(roomId), "reason", "CONNECTION_LIFETIME"));
                         break;
                     }
                     var batch = service.poll(roomId, sequence, loginId);
                     if (closed.get()) break;
+                    if (!credentialsValid.getAsBoolean()) throw ApiException.unauthorized();
                     if (batch.resetRequired()) {
                         control("RESET_REQUIRED", Map.of("roomId", Long.toString(roomId), "reason", "EVENT_CURSOR_EXPIRED",
                                 "historyUrl", "/api/chat-rooms/" + roomId + "/messages"));
@@ -128,7 +142,7 @@ class ChatStreamHub {
                     if (!participated && loginId != null && batch.status() == ChatRoomState.LIVE && !closed.get()) {
                         // STREAM_READY 전송 실패·만료 커서·비회원은 지급하지 않는다.
                         // 대기 중 들어온 연결도 LIVE 전환 뒤 참여하며 메시지는 요구하지 않는다.
-                        participated = service.participate(roomId, loginId);
+                        participated = service.participate(roomId, loginId, credentialsValid);
                     }
                     for (var event : batch.events()) {
                         if (closed.get()) break;

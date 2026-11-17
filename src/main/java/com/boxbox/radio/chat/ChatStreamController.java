@@ -1,6 +1,7 @@
 package com.boxbox.radio.chat;
 
 import com.boxbox.common.api.ApiException;
+import com.boxbox.auth.AuthPrincipal;
 import com.boxbox.common.api.ApiErrorResponse;
 import com.boxbox.common.api.ApiExceptionHandler;
 import com.boxbox.radio.board.BoardFilter;
@@ -39,7 +40,8 @@ class ChatStreamController {
             }
         } catch (org.springframework.http.InvalidMediaTypeException error) { throw ApiException.invalidRequest("Accept 헤더를 확인해 주세요."); }
         var emitter = hub.subscribe(BoardFilter.parseId(roomId, "roomId"), cursor, loginId,
-                loginId == null ? request.getSession(true).getId() : null);
+                loginId == null ? request.getSession(true).getId() : null,
+                request.getUserPrincipal() instanceof AuthPrincipal authenticated ? authenticated::isValid : () -> true);
         return ResponseEntity.ok().contentType(MediaType.TEXT_EVENT_STREAM).header(HttpHeaders.CACHE_CONTROL, "no-store")
                 .header("X-Accel-Buffering", "no").body(emitter);
     }
