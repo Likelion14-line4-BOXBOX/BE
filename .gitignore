@@ -8,6 +8,8 @@ build/
 !.env.example
 *.pem
 *.key
+__pycache__/
+*.py[cod]
 
 # IntelliJ IDEA project settings and output
 .idea/
