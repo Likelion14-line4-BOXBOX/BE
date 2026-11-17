@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def run(*args, **kwargs):
-    return subprocess.run(args, check=True, capture_output=True, text=True, **kwargs).stdout.strip()
+    return subprocess.run(args, check=True, capture_output=True, text=True, encoding="utf-8", **kwargs).stdout.strip()
 
 
 def verify(image, mysql_image):
@@ -37,7 +37,7 @@ def verify(image, mysql_image):
 
             def sql(statement):
                 return run("docker", "exec", "-i", database, "sh", "-c",
-                           'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot -N -B boxbox', input=statement)
+                           'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql --default-character-set=utf8mb4 -uroot -N -B boxbox', input=statement)
 
             for attempt in range(90):
                 try:
@@ -99,6 +99,9 @@ def verify(image, mysql_image):
             ready()
             boards, _ = request("board list", "/api/boards")
             assert len(boards["data"]["items"]) == 2
+            assert [board["name"] for board in boards["data"]["items"]] == ["자유 게시판", "입문자 게시판"]
+            tags, _ = request("Korean seed tags", "/api/boards/" + boards["data"]["items"][0]["boardId"] + "/tags")
+            assert "굿즈" in json.dumps(tags, ensure_ascii=False)
             team, _ = request("empty team filter", "/api/boards?type=TEAM")
             assert team["data"]["items"] == []
             request("invalid filter", "/api/boards?type=INVALID", 400)

@@ -18,7 +18,7 @@ NGINX = 'nginx:1.28-alpine'
 
 
 def run(args, **kwargs):
-    return subprocess.run(args, check=True, capture_output=True, text=True, **kwargs).stdout.strip()
+    return subprocess.run(args, check=True, capture_output=True, text=True, encoding='utf-8', **kwargs).stdout.strip()
 
 
 def exists(name):
@@ -42,7 +42,7 @@ def credentials():
 
 def mysql(sql):
     return run(['docker', 'exec', '-i', 'boxbox-mysql', 'sh', '-c',
-                'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot -N -B boxbox'], input=sql)
+                'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql --default-character-set=utf8mb4 -uroot -N -B boxbox'], input=sql)
 
 
 def ensure_schema(root):
