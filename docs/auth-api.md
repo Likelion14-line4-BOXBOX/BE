@@ -7,6 +7,8 @@ AU01~04와 기존 회원 API의 Bearer 인증을 구현한다. 일반 `loginId`�
 운영 DDL은 프로젝트 루트 `docs/erd/erdcloud-import.sql`의 기존32개 테이블을 사용한다. 인증은 `users`, `coin_ledger`, `auth_sessions`를 사용하며 애플리케이션이 스키마를 생성하지 않는다. 회원·초기 잔액·최초 지급 원장은 한 트랜잭션으로 저장한다.
 
 - `AUTH_JWT_SECRET`: 최소32바이트의 난수를 Base64로 인코딩한 값. 미설정·잘못된 값은 기동 실패다. 아래 테스트 전용 키를 운영에 복사하지 않는다.
+- `AUTH_EXTENDED_ACCESS_USER_IDS`: 서버 운영자가 지정한 연동 테스트 회원의 DB ID 목록(쉼표 구분). 기본값은 비어 있어 일반 access 정책15분을 유지한다. 클라이언트가 기간이나 대상을 지정할 수 없다.
+- `AUTH_EXTENDED_ACCESS_LIFETIME`: 위 목록에만 적용할 access 기간. 기본 P10D(864000초), 설정 범위는15분~14일이다. 로그인·갱신 응답의 expiresIn과 JWT의 발급/검증 상한에 동일하게 적용한다. refresh 기간은 별개다. 기존에 발급한 토큰의 exp는 바뀌지 않으며 재로그인/갱신으로 새로 발급받는다. 테스트 종료 시 목록을 비워 해제한다.
 - `AUTH_ALLOWED_ORIGINS`: 경로·후행 슬래시 없는 정확한 FE Origin을 쉼표로 구분한다. 기본값은 localhost/127.0.0.1의5173·3000 포트다.
 - `AUTH_COOKIE_SAME_SITE`: 기본 Lax. 교차 사이트 배포는 None과 HTTPS를 함께 사용한다. 쿠키는 항상 HttpOnly·Secure·host-only·Path=/api/auth다.
 - `AUTH_REFRESH_LIFETIME`: 기본 P14D. 회전 후에도 해당 로그인 세션의 최초 만료 시각을 유지한다.
@@ -30,10 +32,10 @@ $env:AUTH_ALLOWED_ORIGINS = 'http://localhost:5173'
 
 1. `POST /api/auth/signup`에 loginId/password/nickname을 보낸다. 성공201 후 로그인 화면으로 이동한다.
 2. `POST /api/auth/login`에 loginId/password를 보낸다. 응답 accessToken은 Bearer 헤더에 사용하며 refreshToken은 응답 JSON에 포함하지 않는다. 브라우저는 credentials: include로 쿠키를 받는다.
-3. `GET /api/me` 등 기존 API에 `Authorization: Bearer <accessToken>`을 보낸다. 검증된 Principal.name은 loginId다. access token은 HS256 서명·발급자·대상·사용자 ID·발급/만료 시각을 검증하며15분 유효하다. 발급자 `https://boxbox.local`은 고정 식별자이며 외부 호출 주소로 사용하지 않는다.
+3. `GET /api/me` 등 기존 API에 `Authorization: Bearer <accessToken>`을 보낸다. 검증된 Principal.name은 loginId다. access token은 HS256 서명·발급자·대상·사용자 ID·발급/만료 시각을 검증하며 기본15분 유효하다. 서버가 명시한 연동 테스트 회원은 별도 기간을 적용하므로 FE는 응답 expiresIn을 사용한다. 발급자 `https://boxbox.local`은 고정 식별자이며 외부 호출 주소로 사용하지 않는다.
 4. `POST /api/auth/refresh`는 본문/조회 파라미터 없이 쿠키로 호출한다. 쿠키가 있는 refresh/logout 요청에는 등록된 Origin이 필요하다. Postman 같은 클라이언트도 이 헤더를 함께 보낸다. FE는 여러 재발급 요청을 하나로 모은다.
 5. refresh 재사용 시 해당 로그인 세션 계열을 폐기하고401을 반환한다. 이 폐기는 오류 응답과 함께 롤백되지 않는다. 다른 로그인 계열은 유지한다. 세션 검증401은 쿠키를 지우며403/429에는 기존 쿠키를 유지한다.
-6. `POST /api/auth/logout`은 현재 refresh 계열과 쿠키를 폐기한다. 쿠키 없음/이미 로그아웃은204다. 발급된 access token은 원래15분 만료까지 유효하며 추가 재발급을 차단한다.
+6. `POST /api/auth/logout`은 현재 refresh 계열과 쿠키를 폐기한다. 쿠키 없음/이미 로그아웃은204다. 발급된 access token은 토큰의 원래 만료 시각까지 유효하며 추가 재발급을 차단한다.
 
 브라우저의 Secure 쿠키 사용은 HTTPS와 배포 출처 설정을 맞춰 확인해야 한다. 실제 FE의 쿠키 저장·자동 전송·라우팅은 이번 서버 HTTP 검증과 별도다.
 
