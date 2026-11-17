@@ -86,7 +86,7 @@ CREATE TABLE `boards` (
   CONSTRAINT `ck_boards_team` CHECK ((`type`='TEAM' AND `team_id` IS NOT NULL) OR (`type` IN ('FREE','BEGINNER') AND `team_id` IS NULL))
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='게시판';
 
--- 그랑프리 세부 세션 | CM02, HM01, TR19~21. 세부 일정/실제 전환 DB 직접 입력; 외부 sessions/race_control 수집 없음
+-- 그랑프리 세부 세션 | CM02, HM01, TR19~21. 예정 일정은 OpenF1 sessions에서 동기화; 실제 전환은 별도로 기록
 CREATE TABLE `race_sessions` (
   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT 'PK, AUTO_INCREMENT',
   `race_id` BIGINT UNSIGNED NOT NULL,
