@@ -10,7 +10,7 @@ Parameters:
     Default: ''
   AllowedOrigins:
     Type: String
-    Default: http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000
+    Default: http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000,https://project-boxbox.vercel.app
     AllowedPattern: 'https?://[A-Za-z0-9.:-]+(,https?://[A-Za-z0-9.:-]+)*'
 Conditions:
   CreateOidc: !Equals [!Ref ExistingOidcProviderArn, '']

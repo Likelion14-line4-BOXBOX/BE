@@ -44,7 +44,7 @@ python3 deploy/publish.py --initialize-db
 
 ## FE와 종료
 
-업무 API 요청·응답 계약은 유지한다. 현재 AllowedOrigins는 localhost/127.0.0.1의5173·3000뿐이다. FE 주소가 생기면 정확한 Origin을 호스트 config.json에 반영하고 재배포한다. credentials: include와 Secure/SameSite=None 쿠키의 실제 브라우저 저장·회전·로그아웃을 별도 확인한다. 제3자 쿠키 차단은 SameSite만으로 해제되지 않아 필요하면 FE 개발 프록시/같은 사이트 도메인 구성을 사용한다.
+업무 API 요청·응답 계약은 유지한다. 현재 AllowedOrigins는 localhost/127.0.0.1의5173·3000 및 사용자 지정 https://project-boxbox.vercel.app이다. FE 주소가 바뀌면 정확한 Origin을 호스트 config.json에 반영하고 재배포한다. credentials: include와 Secure/SameSite=None 쿠키의 실제 브라우저 저장·회전·로그아웃을 별도 확인한다. 제3자 쿠키 차단은 SameSite만으로 해제되지 않아 필요하면 FE 개발 프록시/같은 사이트 도메인 구성을 사용한다.
 
 SSE는 기존 fetch/Bearer/Last-Event-ID 계약이며 Nginx 버퍼링/캐시를 끄고 읽기 제한360초를 적용한다. 실제 경기/방 데이터 없이는 운영 LIVE SSE를 검증했다고 주장하지 않는다. MARKET_PREPARATION_ENABLED=false를 유지하고 팀원의 마켓 외부 호출 정책은 이번 범위에서 변경하지 않는다.
 
