@@ -1,174 +1,62 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: BOXBOX EC2 and RDS, private CloudFront origin, main-only OIDC deployment
+Description: BOXBOX one-week Lightsail server, local MySQL, main-only OIDC deployment
 Parameters:
-  InstanceType:
+  InstanceName:
     Type: String
-    Default: t3.medium
-    AllowedValues: [t3.small, t3.medium]
-  DatabaseClass:
-    Type: String
-    Default: db.t4g.micro
-    AllowedValues: [db.t4g.micro, db.t4g.small]
-  CloudFrontPrefixListId:
-    Type: String
-    AllowedPattern: 'pl-[a-f0-9]+'
-    Description: Regional com.amazonaws.global.cloudfront.origin-facing prefix list
+    Default: boxbox-demo
+    AllowedPattern: '[a-z][a-z0-9-]{2,40}'
   ExistingOidcProviderArn:
     Type: String
     Default: ''
-    Description: Leave empty only if the account has no GitHub OIDC provider
   AllowedOrigins:
     Type: String
     Default: http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000
     AllowedPattern: 'https?://[A-Za-z0-9.:-]+(,https?://[A-Za-z0-9.:-]+)*'
-  Ami:
-    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
-    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
 Conditions:
   CreateOidc: !Equals [!Ref ExistingOidcProviderArn, '']
 Resources:
-  Vpc:
-    Type: AWS::EC2::VPC
-    Properties:
-      CidrBlock: 10.46.0.0/16
-      EnableDnsSupport: true
-      EnableDnsHostnames: true
-      Tags: [{Key: Name, Value: !Ref AWS::StackName}]
-  Gateway:
-    Type: AWS::EC2::InternetGateway
-  GatewayAttachment:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties: {VpcId: !Ref Vpc, InternetGatewayId: !Ref Gateway}
-  PublicSubnet:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref Vpc
-      CidrBlock: 10.46.0.0/24
-      AvailabilityZone: !Select [0, !GetAZs '']
-  PrivateA:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref Vpc
-      CidrBlock: 10.46.10.0/24
-      AvailabilityZone: !Select [0, !GetAZs '']
-  PrivateB:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref Vpc
-      CidrBlock: 10.46.11.0/24
-      AvailabilityZone: !Select [1, !GetAZs '']
-  PublicRoutes:
-    Type: AWS::EC2::RouteTable
-    Properties: {VpcId: !Ref Vpc}
-  PublicRoute:
-    Type: AWS::EC2::Route
-    DependsOn: GatewayAttachment
-    Properties: {RouteTableId: !Ref PublicRoutes, DestinationCidrBlock: 0.0.0.0/0, GatewayId: !Ref Gateway}
-  PublicAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties: {SubnetId: !Ref PublicSubnet, RouteTableId: !Ref PublicRoutes}
-  NatAddress:
-    Type: AWS::EC2::EIP
-    DependsOn: GatewayAttachment
-    Properties: {Domain: vpc}
-  Nat:
-    Type: AWS::EC2::NatGateway
-    DependsOn: PublicRoute
-    Properties: {SubnetId: !Ref PublicSubnet, AllocationId: !GetAtt NatAddress.AllocationId}
-  PrivateRoutes:
-    Type: AWS::EC2::RouteTable
-    Properties: {VpcId: !Ref Vpc}
-  PrivateRoute:
-    Type: AWS::EC2::Route
-    Properties: {RouteTableId: !Ref PrivateRoutes, DestinationCidrBlock: 0.0.0.0/0, NatGatewayId: !Ref Nat}
-  PrivateAssociationA:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties: {SubnetId: !Ref PrivateA, RouteTableId: !Ref PrivateRoutes}
-  PrivateAssociationB:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties: {SubnetId: !Ref PrivateB, RouteTableId: !Ref PrivateRoutes}
-  AppSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: CloudFront only; no SSH or public application port
-      VpcId: !Ref Vpc
-      SecurityGroupIngress:
-        - {IpProtocol: tcp, FromPort: 8080, ToPort: 8080, SourcePrefixListId: !Ref CloudFrontPrefixListId}
-      SecurityGroupEgress:
-        - {IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: 0.0.0.0/0}
-        - {IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: 0.0.0.0/0}
-  DatabaseSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: MySQL only from BOXBOX application
-      VpcId: !Ref Vpc
-      SecurityGroupIngress:
-        - {IpProtocol: tcp, FromPort: 3306, ToPort: 3306, SourceSecurityGroupId: !Ref AppSecurityGroup}
-  DatabaseEgress:
-    Type: AWS::EC2::SecurityGroupEgress
-    Properties:
-      GroupId: !Ref AppSecurityGroup
-      IpProtocol: tcp
-      FromPort: 3306
-      ToPort: 3306
-      DestinationSecurityGroupId: !Ref DatabaseSecurityGroup
-  DatabaseSubnets:
-    Type: AWS::RDS::DBSubnetGroup
-    Properties:
-      DBSubnetGroupDescription: Two private subnets
-      SubnetIds: [!Ref PrivateA, !Ref PrivateB]
-  DatabaseParameters:
-    Type: AWS::RDS::DBParameterGroup
-    Properties:
-      Description: MySQL TLS required
-      Family: mysql8.4
-      Parameters: {require_secure_transport: '1', character_set_server: utf8mb4, collation_server: utf8mb4_0900_ai_ci}
-  Database:
-    Type: AWS::RDS::DBInstance
-    DeletionPolicy: Snapshot
-    UpdateReplacePolicy: Snapshot
-    Properties:
-      Engine: mysql
-      EngineVersion: '8.4.11'
-      DBInstanceClass: !Ref DatabaseClass
-      DBName: boxbox
-      MasterUsername: boxbox_admin
-      ManageMasterUserPassword: true
-      DBSubnetGroupName: !Ref DatabaseSubnets
-      DBParameterGroupName: !Ref DatabaseParameters
-      VPCSecurityGroups: [!Ref DatabaseSecurityGroup]
-      AllocatedStorage: '20'
-      MaxAllocatedStorage: 100
-      StorageType: gp3
-      StorageEncrypted: true
-      PubliclyAccessible: false
-      BackupRetentionPeriod: 7
-      DeletionProtection: true
-      AutoMinorVersionUpgrade: true
-      CopyTagsToSnapshot: true
-      MultiAZ: false
-  DatabaseSecret:
-    Type: AWS::SecretsManager::Secret
+  Instance:
+    Type: AWS::Lightsail::Instance
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      Description: Restricted BOXBOX application DB account
-      GenerateSecretString:
-        SecretStringTemplate: '{"username":"boxbox_app"}'
-        GenerateStringKey: password
-        PasswordLength: 48
-        ExcludePunctuation: true
-  JwtSecret:
-    Type: AWS::SecretsManager::Secret
+      InstanceName: !Ref InstanceName
+      AvailabilityZone: !Sub '${AWS::Region}a'
+      BlueprintId: ubuntu_24_04
+      BundleId: small_3_0
+      Networking:
+        Ports:
+          - {FromPort: 22, ToPort: 22, Protocol: tcp, Cidrs: [0.0.0.0/0]}
+          - {FromPort: 80, ToPort: 80, Protocol: tcp, Cidrs: [0.0.0.0/0]}
+          - {FromPort: 443, ToPort: 443, Protocol: tcp, Cidrs: [0.0.0.0/0]}
+      Tags: [{Key: Project, Value: BOXBOX}, {Key: Purpose, Value: one-week-demo}]
+      UserData: !Sub |
+        #!/bin/bash
+        set -euo pipefail
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update
+        apt-get install -y docker.io python3 curl ca-certificates
+        systemctl enable --now docker
+        install -d -m 700 /opt/boxbox /etc/boxbox
+        printf '%s\n' '{"allowed_origins":"${AllowedOrigins}"}' > /etc/boxbox/config.json
+        chmod 600 /etc/boxbox/config.json
+        if ! test -f /swapfile; then
+          fallocate -l 1G /swapfile
+          chmod 600 /swapfile
+          mkswap /swapfile
+          swapon /swapfile
+          printf '/swapfile none swap sw 0 0\n' >> /etc/fstab
+        fi
+        printf 'PasswordAuthentication no\nPermitRootLogin no\n' > /etc/ssh/sshd_config.d/00-boxbox.conf
+        systemctl reload ssh
+  Address:
+    Type: AWS::Lightsail::StaticIp
+    DependsOn: Instance
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      Description: Stable 48-byte Base64-compatible signing key, generated once
-      GenerateSecretString:
-        SecretStringTemplate: '{}'
-        GenerateStringKey: key
-        PasswordLength: 64
-        ExcludePunctuation: true
+      StaticIpName: !Sub '${InstanceName}-ip'
+      AttachedTo: !Ref InstanceName
   Images:
     Type: AWS::ECR::Repository
     DeletionPolicy: Retain
@@ -177,164 +65,6 @@ Resources:
       ImageTagMutability: IMMUTABLE
       ImageScanningConfiguration: {ScanOnPush: true}
       EncryptionConfiguration: {EncryptionType: AES256}
-  Releases:
-    Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Properties:
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      BucketEncryption:
-        ServerSideEncryptionConfiguration: [{ServerSideEncryptionByDefault: {SSEAlgorithm: AES256}}]
-      VersioningConfiguration: {Status: Enabled}
-      OwnershipControls: {Rules: [{ObjectOwnership: BucketOwnerEnforced}]}
-  ReleasesPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref Releases
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Deny
-            Principal: '*'
-            Action: s3:*
-            Resource: [!GetAtt Releases.Arn, !Sub '${Releases.Arn}/*']
-            Condition: {Bool: {aws:SecureTransport: 'false'}}
-  InstanceRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement: [{Effect: Allow, Principal: {Service: ec2.amazonaws.com}, Action: 'sts:AssumeRole'}]
-      ManagedPolicyArns: [!Sub 'arn:${AWS::Partition}:iam::aws:policy/AmazonSSMManagedInstanceCore']
-      Policies:
-        - PolicyName: Runtime
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action: secretsmanager:GetSecretValue
-                Resource: [!Ref DatabaseSecret, !Ref JwtSecret, !GetAtt Database.MasterUserSecret.SecretArn]
-              - {Effect: Allow, Action: 'ecr:GetAuthorizationToken', Resource: '*'}
-              - Effect: Allow
-                Action: [ecr:BatchGetImage, ecr:GetDownloadUrlForLayer, ecr:BatchCheckLayerAvailability]
-                Resource: !GetAtt Images.Arn
-              - {Effect: Allow, Action: 's3:GetObject', Resource: !Sub '${Releases.Arn}/releases/*'}
-  InstanceProfile:
-    Type: AWS::IAM::InstanceProfile
-    Properties: {Roles: [!Ref InstanceRole]}
-  Instance:
-    Type: AWS::EC2::Instance
-    DependsOn: [PrivateRoute, PrivateAssociationA, DatabaseEgress]
-    Properties:
-      ImageId: !Ref Ami
-      InstanceType: !Ref InstanceType
-      IamInstanceProfile: !Ref InstanceProfile
-      SubnetId: !Ref PrivateA
-      SecurityGroupIds: [!Ref AppSecurityGroup]
-      MetadataOptions: {HttpTokens: required, HttpPutResponseHopLimit: 1}
-      BlockDeviceMappings:
-        - DeviceName: /dev/xvda
-          Ebs: {VolumeSize: 20, VolumeType: gp3, Encrypted: true, DeleteOnTermination: true}
-      Tags: [{Key: Name, Value: !Sub '${AWS::StackName}-api'}]
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash
-          set -euo pipefail
-          dnf install -y docker python3 mariadb105
-          systemctl enable --now docker
-          install -d -m 700 /opt/boxbox /etc/boxbox
-          curl --fail --retry 5 https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem -o /etc/boxbox/rds-ca.pem
-          cat > /etc/boxbox/config.json <<'JSON'
-          {"region":"${AWS::Region}","db_host":"${Database.Endpoint.Address}","admin_secret":"${Database.MasterUserSecret.SecretArn}","database_secret":"${DatabaseSecret}","jwt_secret":"${JwtSecret}","image_repository":"${Images.RepositoryUri}","allowed_origins":"${AllowedOrigins}"}
-          JSON
-          chmod 600 /etc/boxbox/config.json
-  VpcOrigin:
-    Type: AWS::CloudFront::VpcOrigin
-    Properties:
-      VpcOriginEndpointConfig:
-        Name: !Sub '${AWS::StackName}-api'
-        Arn: !Sub 'arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:instance/${Instance}'
-        HTTPPort: 8080
-        HTTPSPort: 443
-        OriginProtocolPolicy: http-only
-        OriginSSLProtocols: [TLSv1.2]
-  Distribution:
-    Type: AWS::CloudFront::Distribution
-    Properties:
-      DistributionConfig:
-        Enabled: true
-        Comment: !Sub '${AWS::StackName} HTTPS API, no application caching'
-        HttpVersion: http2and3
-        IPV6Enabled: true
-        ViewerCertificate: {CloudFrontDefaultCertificate: true}
-        Origins:
-          - Id: api
-            DomainName: !GetAtt Instance.PrivateDnsName
-            ConnectionAttempts: 1
-            VpcOriginConfig: {VpcOriginId: !GetAtt VpcOrigin.Id, OriginReadTimeout: 60, OriginKeepaliveTimeout: 5}
-        DefaultCacheBehavior:
-          TargetOriginId: api
-          ViewerProtocolPolicy: https-only
-          AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
-          CachedMethods: [GET, HEAD]
-          Compress: false
-          CachePolicyId: 413f160d-7a90-46b1-8c7e-5bd84d72cfcf
-          OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
-        CustomErrorResponses:
-          - {ErrorCode: 400, ErrorCachingMinTTL: 0}
-          - {ErrorCode: 403, ErrorCachingMinTTL: 0}
-          - {ErrorCode: 404, ErrorCachingMinTTL: 0}
-          - {ErrorCode: 500, ErrorCachingMinTTL: 0}
-          - {ErrorCode: 502, ErrorCachingMinTTL: 0}
-          - {ErrorCode: 503, ErrorCachingMinTTL: 0}
-          - {ErrorCode: 504, ErrorCachingMinTTL: 0}
-  DeployDocument:
-    Type: AWS::SSM::Document
-    Properties:
-      DocumentType: Command
-      Content:
-        schemaVersion: '2.2'
-        description: Deploy a main release by immutable revision and digest; no database initialization
-        parameters:
-          Revision: {type: String, allowedPattern: '^[a-f0-9]{40}$', interpolationType: ENV_VAR}
-          ImageDigest: {type: String, allowedPattern: '^sha256:[a-f0-9]{64}$', interpolationType: ENV_VAR}
-        mainSteps:
-          - action: aws:runShellScript
-            name: deploy
-            inputs:
-              timeoutSeconds: '1200'
-              runCommand:
-                - !Sub |
-                    set -eu
-                    release_dir="$(mktemp -d /opt/boxbox/release.XXXXXXXX)"
-                    aws s3 cp 's3://${Releases}/releases/'"$SSM_Revision"'/release.tar.gz' "$release_dir/release.tar.gz" --region '${AWS::Region}' --only-show-errors
-                    tar -xzf "$release_dir/release.tar.gz" -C "$release_dir" --no-same-owner
-                    python3 "$release_dir/deploy/runtime.py" --revision "$SSM_Revision" --digest "$SSM_ImageDigest"
-  InitializeDocument:
-    Type: AWS::SSM::Document
-    Properties:
-      DocumentType: Command
-      Content:
-        schemaVersion: '2.2'
-        description: Operator-only initialization of an empty new database, never available to GitHub deploy role
-        parameters:
-          Revision: {type: String, allowedPattern: '^[a-f0-9]{40}$', interpolationType: ENV_VAR}
-        mainSteps:
-          - action: aws:runShellScript
-            name: initialize
-            inputs:
-              timeoutSeconds: '600'
-              runCommand:
-                - !Sub |
-                    set -eu
-                    release_dir="$(mktemp -d /opt/boxbox/init.XXXXXXXX)"
-                    aws s3 cp 's3://${Releases}/releases/'"$SSM_Revision"'/release.tar.gz' "$release_dir/release.tar.gz" --region '${AWS::Region}' --only-show-errors
-                    tar -xzf "$release_dir/release.tar.gz" -C "$release_dir" --no-same-owner
-                    python3 "$release_dir/deploy/runtime.py" --initialize-db
   OidcProvider:
     Type: AWS::IAM::OIDCProvider
     Condition: CreateOidc
@@ -366,20 +96,13 @@ Resources:
               - Effect: Allow
                 Action: [ecr:BatchGetImage, ecr:BatchCheckLayerAvailability, ecr:CompleteLayerUpload, ecr:DescribeImages, ecr:ListImages, ecr:GetDownloadUrlForLayer, ecr:InitiateLayerUpload, ecr:PutImage, ecr:UploadLayerPart]
                 Resource: !GetAtt Images.Arn
-              - {Effect: Allow, Action: ['s3:PutObject', 's3:GetObject'], Resource: !Sub '${Releases.Arn}/releases/*'}
               - {Effect: Allow, Action: 'cloudformation:DescribeStacks', Resource: !Ref AWS::StackId}
               - Effect: Allow
-                Action: ssm:SendCommand
-                Resource:
-                  - !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:document/${DeployDocument}'
-                  - !Sub 'arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:instance/${Instance}'
-              - {Effect: Allow, Action: 'ssm:GetCommandInvocation', Resource: '*'}
+                Action: [lightsail:GetInstance, lightsail:GetInstanceAccessDetails]
+                Resource: !GetAtt Instance.InstanceArn
 Outputs:
-  ApiUrl: {Value: !Sub 'https://${Distribution.DomainName}'}
-  InstanceId: {Value: !Ref Instance}
-  DatabaseEndpoint: {Value: !GetAtt Database.Endpoint.Address}
+  ApiUrl: {Value: !Sub 'https://${Address.IpAddress}'}
+  InstanceName: {Value: !Ref InstanceName}
+  PublicIp: {Value: !GetAtt Address.IpAddress}
   ImageRepository: {Value: !GetAtt Images.RepositoryUri}
-  ReleaseBucket: {Value: !Ref Releases}
-  DeployDocument: {Value: !Ref DeployDocument}
-  InitializeDocument: {Value: !Ref InitializeDocument}
   GitHubRoleArn: {Value: !GetAtt GitHubRole.Arn}

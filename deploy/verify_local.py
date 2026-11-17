@@ -28,10 +28,11 @@ def verify(image, mysql_image):
         with tempfile.TemporaryDirectory() as directory:
             password = secrets.token_hex(24)
             environment = Path(directory) / "mysql.env"
-            environment.write_text("MYSQL_ROOT_PASSWORD=" + password + "\nMYSQL_DATABASE=boxbox\n")
+            environment.write_text("MYSQL_ROOT_PASSWORD=" + password + "\nMYSQL_DATABASE=boxbox\nMYSQL_USER=boxbox\nMYSQL_PASSWORD=" + password + "\n")
             os.chmod(environment, 0o600)
             run("docker", "run", "--detach", "--name", database, "--network", network,
-                "--env-file", str(environment), mysql_image)
+                "--env-file", str(environment), "--memory", "512m", mysql_image,
+                "--innodb-buffer-pool-size=128M", "--max-connections=60", "--performance-schema=OFF")
             created.append(database)
 
             def sql(statement):
@@ -48,12 +49,13 @@ def verify(image, mysql_image):
                     time.sleep(2)
             sql((ROOT / "deploy/db/schema.sql").read_text(encoding="utf-8"))
             sql((ROOT / "deploy/db/board-seed.sql").read_text(encoding="utf-8"))
+            sql("REVOKE ALL PRIVILEGES ON boxbox.* FROM 'boxbox'@'%'; GRANT SELECT, INSERT, UPDATE, DELETE ON boxbox.* TO 'boxbox'@'%';")
             environment = Path(directory) / "app.env"
             signing_key = base64.b64encode(secrets.token_bytes(48)).decode()
             environment.write_text("\n".join([
-                # Only the disposable MySQL container lacks an RDS-signed server certificate.
+                # This matches the final same-host, unpublished Docker MySQL connection.
                 "DB_URL=jdbc:mysql://" + database + ":3306/boxbox?connectionTimeZone=UTC&sslMode=DISABLED&allowPublicKeyRetrieval=true",
-                "DB_USERNAME=root", "DB_PASSWORD=" + password,
+                "DB_USERNAME=boxbox", "DB_PASSWORD=" + password,
                 "AUTH_JWT_SECRET=" + signing_key,
                 "AUTH_ALLOWED_ORIGINS=http://localhost:5173", "AUTH_COOKIE_SAME_SITE=None",
                 "SERVER_SERVLET_SESSION_COOKIE_SECURE=true", "SERVER_SERVLET_SESSION_COOKIE_SAME_SITE=None",
@@ -63,7 +65,7 @@ def verify(image, mysql_image):
             run("docker", "run", "--detach", "--name", app, "--network", network,
                 "--env-file", str(environment), "--publish", "127.0.0.1::8080", "--read-only",
                 "--tmpfs", "/tmp:rw,noexec,nosuid,size=128m", "--cap-drop", "ALL",
-                "--security-opt", "no-new-privileges", "--memory", "1536m", image)
+                "--security-opt", "no-new-privileges", "--memory", "1024m", image)
             created.append(app)
             port = json.loads(run("docker", "inspect", app))[0]["NetworkSettings"]["Ports"]["8080/tcp"][0]["HostPort"]
             base = "http://127.0.0.1:" + port
@@ -158,7 +160,7 @@ def verify(image, mysql_image):
             request("logout", "/api/auth/logout", 204, method="POST", headers={
                 "Origin": "http://localhost:5173", "Cookie": cookie})
             return {"database": "disposable Docker MySQL", "mysql_image": mysql_image,
-                    "transport": "local HTTP; RDS TLS and FE browser are separate checks", "checks": checks}
+                    "transport": "local HTTP; public HTTPS and FE browser are separate checks", "checks": checks}
     except Exception:
         if app in created:
             result = subprocess.run(["docker", "logs", "--tail", "1000", app], capture_output=True, text=True)

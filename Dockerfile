@@ -6,16 +6,6 @@ RUN apt-get update \
     && groupadd --gid 10001 boxbox \
     && useradd --uid 10001 --gid boxbox --no-create-home boxbox
 
-# Verify the RDS server identity with the current AWS CA bundle.
-RUN curl --fail --silent --show-error --retry 3 \
-      https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem -o /tmp/rds.pem \
-    && awk '/BEGIN CERTIFICATE/{n++} {print > ("/tmp/rds-ca-" n ".pem")}' /tmp/rds.pem \
-    && for cert in /tmp/rds-ca-*.pem; do \
-         keytool -importcert -noprompt -trustcacerts -cacerts -storepass changeit \
-           -alias "$(basename "$cert")" -file "$cert"; \
-       done \
-    && rm -f /tmp/rds.pem /tmp/rds-ca-*.pem
-
 WORKDIR /app
 COPY --chown=boxbox:boxbox build/docker/app.jar /app/app.jar
 USER 10001:10001
