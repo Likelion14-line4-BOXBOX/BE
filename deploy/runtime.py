@@ -88,14 +88,29 @@ def app_env():
     origins = config['allowed_origins']
     if not re.fullmatch(r'https?://[A-Za-z0-9.:-]+(,https?://[A-Za-z0-9.:-]+)*', origins):
         raise RuntimeError('Invalid allowed origins')
+    extended_ids = config.get('extended_access_user_ids', [])
+    if not isinstance(extended_ids, list) or any(type(value) is not int or not 0 < value < 2**63 for value in extended_ids):
+        raise RuntimeError('Invalid extended access user IDs')
+    extended_ids = sorted(set(extended_ids))
+    if extended_ids:
+        expected = set(map(str, extended_ids))
+        actual = set(mysql('SELECT id FROM users WHERE id IN (' + ','.join(expected)
+                           + ") AND status='ACTIVE' AND deleted_at IS NULL;").splitlines())
+        if actual != expected:
+            raise RuntimeError('Extended access requires existing active users')
+    extended_lifetime = config.get('extended_access_lifetime', 'P10D')
+    if not isinstance(extended_lifetime, str) or not re.fullmatch(r'P([1-9]|1[0-4])D', extended_lifetime):
+        raise RuntimeError('Invalid extended access lifetime')
     path = SETTINGS / 'app.env'
     private_file(path, '\n'.join([
         # Only this same-host Docker network uses non-TLS MySQL; port 3306 is never published.
         'DB_URL=jdbc:mysql://boxbox-mysql:3306/boxbox?connectionTimeZone=UTC&sslMode=DISABLED&allowPublicKeyRetrieval=true',
         'DB_USERNAME=boxbox', 'DB_PASSWORD=' + values['db_password'], 'AUTH_JWT_SECRET=' + values['jwt'],
         'AUTH_ALLOWED_ORIGINS=' + origins, 'AUTH_COOKIE_SAME_SITE=None',
+        'AUTH_EXTENDED_ACCESS_USER_IDS=' + ','.join(map(str, extended_ids)),
+        'AUTH_EXTENDED_ACCESS_LIFETIME=' + extended_lifetime,
         'SERVER_SERVLET_SESSION_COOKIE_SECURE=true', 'SERVER_SERVLET_SESSION_COOKIE_SAME_SITE=None',
-        'MARKET_PREPARATION_ENABLED=false',
+        'MARKET_PREPARATION_ENABLED=true',
     ]) + '\n')
     return path
 

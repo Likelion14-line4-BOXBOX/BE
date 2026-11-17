@@ -129,7 +129,7 @@ class AuthService {
         return pair(userId, refresh, expires);
     }
     private Tokens pair(long userId, String raw, Instant expires) {
-        return new Tokens(new TokenResponse(tokens.access(userId), "Bearer", AuthTokens.ACCESS_SECONDS), raw, expires);
+        return new Tokens(new TokenResponse(tokens.access(userId), "Bearer", tokens.accessSeconds(userId)), raw, expires);
     }
     private static RefreshResult rejected(String code) { return new RefreshResult(null, new RefreshFailure(code)); }
     private static ApiException loginFailed() { return new ApiException(HttpStatus.UNAUTHORIZED, "LOGIN_FAILED", "로그인 정보를 확인해 주세요."); }

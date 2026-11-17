@@ -10,7 +10,9 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.core.env.Environment;
@@ -27,9 +29,22 @@ class AuthTokens {
     private final JwtEncoder encoder;
     private final NimbusJwtDecoder decoder;
     private final SecureRandom random = new SecureRandom();
+    private final Set<Long> extendedAccessUserIds;
+    private final long extendedAccessSeconds;
 
     AuthTokens(Environment env, Clock clock) {
         this.clock = clock;
+        String ids = env.getProperty("boxbox.auth.extended-access-user-ids", "").trim();
+        extendedAccessUserIds = ids.isEmpty() ? Set.of() : Set.copyOf(Arrays.stream(ids.split(",", -1))
+                .map(String::trim).map(value -> {
+                    if (!value.matches("[1-9][0-9]{0,18}")) throw new IllegalArgumentException("확장 토큰의 회원 ID를 확인해 주세요.");
+                    return Long.parseLong(value);
+                }).toList());
+        Duration lifetime = Duration.parse(env.getProperty("boxbox.auth.extended-access-lifetime", "P10D"));
+        if (lifetime.getNano() != 0 || lifetime.compareTo(Duration.ofSeconds(ACCESS_SECONDS)) < 0
+                || lifetime.compareTo(Duration.ofDays(14)) > 0)
+            throw new IllegalArgumentException("확장 access token 유효 기간은 15분 이상 14일 이하여야 합니다.");
+        extendedAccessSeconds = lifetime.getSeconds();
         byte[] secret;
         try { secret = Base64.getDecoder().decode(env.getProperty("boxbox.auth.jwt-secret", "")); }
         catch (IllegalArgumentException error) { throw new IllegalArgumentException("AUTH_JWT_SECRET은 Base64 형식이어야 합니다."); }
@@ -44,7 +59,8 @@ class AuthTokens {
                     && jwt.getAudience() != null && jwt.getAudience().contains("boxbox-api") && jwt.getSubject() != null
                     && jwt.getSubject().matches("[1-9][0-9]{0,18}")
                     && issued != null && !issued.isAfter(now) && expires != null && expires.isAfter(now)
-                    && expires.isAfter(issued) && Duration.between(issued, expires).getSeconds() <= ACCESS_SECONDS
+                    && expires.isAfter(issued)
+                    && Duration.between(issued, expires).compareTo(Duration.ofSeconds(accessSeconds(Long.parseLong(jwt.getSubject())))) <= 0
                     && (notBefore == null || !notBefore.isAfter(now));
             return valid ? OAuth2TokenValidatorResult.success()
                     : OAuth2TokenValidatorResult.failure(new OAuth2Error("invalid_token"));
@@ -54,13 +70,17 @@ class AuthTokens {
     String access(long userId) {
         Instant now = clock.instant();
         var claims = JwtClaimsSet.builder().issuer("https://boxbox.local").audience(List.of("boxbox-api"))
-                .subject(Long.toString(userId)).issuedAt(now).expiresAt(now.plusSeconds(ACCESS_SECONDS))
+                .subject(Long.toString(userId)).issuedAt(now).expiresAt(now.plusSeconds(accessSeconds(userId)))
                 .id(UUID.randomUUID().toString()).build();
         return encoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).type("JWT").build(), claims)).getTokenValue();
     }
 
     long verify(String token) {
         return verified(token).userId();
+    }
+
+    long accessSeconds(long userId) {
+        return extendedAccessUserIds.contains(userId) ? extendedAccessSeconds : ACCESS_SECONDS;
     }
 
     record VerifiedAccess(long userId, Instant expiresAt) {}
