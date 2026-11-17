@@ -11,6 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestClientException;
@@ -27,6 +28,7 @@ import java.util.UUID;
 public class RaceController {
     private static final Logger log = LoggerFactory.getLogger(RaceController.class);
     private final RaceScheduleService raceScheduleService;
+    private final RaceDetailRepository raceDetailRepository;
 
     @GetMapping("/api/races")
     public RaceResponse getRaces(@RequestParam(name = "season", required = false) Integer season,
@@ -42,6 +44,15 @@ public class RaceController {
         int afterRound = readCursor(cursor, requestedSeason, status);
         RacePage page = raceScheduleService.getRaces(requestedSeason, status, afterRound, size);
         return new RaceResponse(page, meta);
+    }
+
+    @GetMapping("/api/races/{raceId}")
+    public ResponseEntity<?> getRace(@PathVariable("raceId") String raceId) {
+        Meta meta = newMeta();
+        return raceDetailRepository.findById(raceId)
+                .<ResponseEntity<?>>map(race -> ResponseEntity.ok(new RaceDetailResponse(race, meta)))
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ErrorResponse(
+                        new ApiError("RACE_NOT_FOUND", "레이스를 찾을 수 없습니다.", List.of()), meta)));
     }
 
     private int readCursor(String cursor, int season, RaceStatus status) {
@@ -102,6 +113,7 @@ public class RaceController {
     }
 
     record RaceResponse(RacePage data, Meta meta) {}
+    record RaceDetailResponse(RaceDetailRepository.RaceDetail data, Meta meta) {}
     record Meta(String requestId, Instant serverTime) {}
     record ErrorResponse(ApiError error, Meta meta) {}
     record ApiError(String code, String message, List<Object> details) {}
