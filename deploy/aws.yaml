@@ -1,0 +1,109 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: BOXBOX one-week Lightsail server, local MySQL, main-only OIDC deployment
+Parameters:
+  InstanceName:
+    Type: String
+    Default: boxbox-demo
+    AllowedPattern: '[a-z][a-z0-9-]{2,40}'
+  ExistingOidcProviderArn:
+    Type: String
+    Default: ''
+  AllowedOrigins:
+    Type: String
+    Default: http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000,https://project-boxbox.vercel.app
+    AllowedPattern: 'https?://[A-Za-z0-9.:-]+(,https?://[A-Za-z0-9.:-]+)*'
+Conditions:
+  CreateOidc: !Equals [!Ref ExistingOidcProviderArn, '']
+Resources:
+  Instance:
+    Type: AWS::Lightsail::Instance
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      InstanceName: !Ref InstanceName
+      AvailabilityZone: !Sub '${AWS::Region}a'
+      BlueprintId: ubuntu_24_04
+      BundleId: small_3_0
+      Networking:
+        Ports:
+          - {FromPort: 22, ToPort: 22, Protocol: tcp, Cidrs: [0.0.0.0/0]}
+          - {FromPort: 80, ToPort: 80, Protocol: tcp, Cidrs: [0.0.0.0/0]}
+          - {FromPort: 443, ToPort: 443, Protocol: tcp, Cidrs: [0.0.0.0/0]}
+      Tags: [{Key: Project, Value: BOXBOX}, {Key: Purpose, Value: one-week-demo}]
+      UserData: !Sub |
+        #!/bin/sh
+        # Lightsail prepends its own /bin/sh script, so this must remain POSIX.
+        set -eu
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update
+        apt-get install -y docker.io python3 curl ca-certificates
+        systemctl enable --now docker
+        install -d -m 700 /opt/boxbox /etc/boxbox
+        printf '%s\n' '{"allowed_origins":"${AllowedOrigins}"}' > /etc/boxbox/config.json
+        chmod 600 /etc/boxbox/config.json
+        if ! test -f /swapfile; then
+          fallocate -l 1G /swapfile
+          chmod 600 /swapfile
+          mkswap /swapfile
+          swapon /swapfile
+          printf '/swapfile none swap sw 0 0\n' >> /etc/fstab
+        fi
+        printf 'PasswordAuthentication no\nPermitRootLogin no\n' > /etc/ssh/sshd_config.d/00-boxbox.conf
+        systemctl reload ssh
+  Address:
+    Type: AWS::Lightsail::StaticIp
+    DependsOn: Instance
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      StaticIpName: !Sub '${InstanceName}-ip'
+      AttachedTo: !Ref InstanceName
+  Images:
+    Type: AWS::ECR::Repository
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      ImageTagMutability: IMMUTABLE
+      ImageScanningConfiguration: {ScanOnPush: true}
+      EncryptionConfiguration: {EncryptionType: AES256}
+  OidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Condition: CreateOidc
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList: [sts.amazonaws.com]
+  GitHubRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !If [CreateOidc, !Ref OidcProvider, !Ref ExistingOidcProviderArn]
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub:
+                  - repo:Likelion14-line4-BOXBOX/BE:ref:refs/heads/main
+                  - repo:Likelion14-line4-BOXBOX@351010449/BE@1441657647:ref:refs/heads/main
+      Policies:
+        - PolicyName: PublishAndDeployMain
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - {Effect: Allow, Action: 'ecr:GetAuthorizationToken', Resource: '*'}
+              - Effect: Allow
+                Action: [ecr:BatchGetImage, ecr:BatchCheckLayerAvailability, ecr:CompleteLayerUpload, ecr:DescribeImages, ecr:ListImages, ecr:GetDownloadUrlForLayer, ecr:InitiateLayerUpload, ecr:PutImage, ecr:UploadLayerPart]
+                Resource: !GetAtt Images.Arn
+              - {Effect: Allow, Action: 'cloudformation:DescribeStacks', Resource: !Ref AWS::StackId}
+              - Effect: Allow
+                Action: [lightsail:GetInstance, lightsail:GetInstanceAccessDetails]
+                Resource: !GetAtt Instance.InstanceArn
+Outputs:
+  ApiUrl: {Value: !Sub 'https://${Address.IpAddress}'}
+  InstanceName: {Value: !Ref InstanceName}
+  PublicIp: {Value: !GetAtt Address.IpAddress}
+  ImageRepository: {Value: !GetAtt Images.RepositoryUri}
+  GitHubRoleArn: {Value: !GetAtt GitHubRole.Arn}
