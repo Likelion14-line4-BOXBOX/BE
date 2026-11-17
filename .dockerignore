@@ -1,0 +1,4 @@
+**
+!build/
+!build/docker/
+!build/docker/app.jar
