@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.*;
 import com.boxbox.common.api.ApiException;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Base64;
@@ -39,6 +40,47 @@ class AuthTokenTests {
         pieces[2] = (pieces[2].startsWith("A") ? "B" : "A") + pieces[2].substring(1);
         assertThatThrownBy(() -> tokens.verify(String.join(".", pieces))).isInstanceOf(ApiException.class);
         assertThatThrownBy(() -> tokens.verify("eyJhbGciOiJub25lIn0.eyJzdWIiOiI0MiJ9.")).isInstanceOf(ApiException.class);
+    }
+    @Test void extendedLifetimeOnlyAppliesToConfiguredUserAndExpiresAtTenDays() {
+        var clock = new AuthApiTests.MutableClock();
+        var env = new MockEnvironment().withProperty("boxbox.auth.jwt-secret", SECRET)
+                .withProperty("boxbox.auth.extended-access-user-ids", "42")
+                .withProperty("boxbox.auth.extended-access-lifetime", "P10D");
+        var configured = new AuthTokens(env, clock);
+        String extended = configured.access(42), ordinary = configured.access(43);
+        assertThat(configured.accessSeconds(42)).isEqualTo(864000);
+        assertThat(configured.accessSeconds(43)).isEqualTo(900);
+        assertThat(configured.verified(extended).expiresAt()).isEqualTo(clock.instant().plus(Duration.ofDays(10)));
+        assertThatThrownBy(() -> tokens.verify(extended)).isInstanceOf(ApiException.class);
+        clock.advance(Duration.ofMinutes(15));
+        assertThat(configured.verify(extended)).isEqualTo(42);
+        assertThatThrownBy(() -> configured.verify(ordinary)).isInstanceOf(ApiException.class);
+        clock.advance(Duration.ofDays(10).minusMinutes(15));
+        assertThatThrownBy(() -> configured.verify(extended)).isInstanceOf(ApiException.class);
+    }
+    @Test void validSignatureDoesNotPermitLongTokenForOtherUserOrBeyondConfiguredLimit() {
+        var configured = new AuthTokens(new MockEnvironment().withProperty("boxbox.auth.jwt-secret", SECRET)
+                .withProperty("boxbox.auth.extended-access-user-ids", "42"), Clock.fixed(NOW, ZoneOffset.UTC));
+        for (long user : new long[]{42, 43}) {
+            long lifetime = user == 42 ? 864001 : 864000;
+            var claims = JwtClaimsSet.builder().issuer("https://boxbox.local").audience(List.of("boxbox-api"))
+                    .subject(Long.toString(user)).issuedAt(NOW).expiresAt(NOW.plusSeconds(lifetime)).build();
+            var encoder = new NimbusJwtEncoder(new ImmutableSecret<>(new SecretKeySpec(Base64.getDecoder().decode(SECRET), "HmacSHA256")));
+            String signed = encoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims)).getTokenValue();
+            assertThatThrownBy(() -> configured.verify(signed)).isInstanceOf(ApiException.class);
+        }
+    }
+    @ParameterizedTest @ValueSource(strings = {"0", "-1", "42,", "someone", "9999999999999999999"})
+    void refusesInvalidExtendedUserIds(String ids) {
+        assertThatThrownBy(() -> new AuthTokens(new MockEnvironment().withProperty("boxbox.auth.jwt-secret", SECRET)
+                .withProperty("boxbox.auth.extended-access-user-ids", ids), Clock.systemUTC()))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+    @ParameterizedTest @ValueSource(strings = {"PT899S", "P15D", "PT900.5S", "invalid"})
+    void refusesInvalidExtendedLifetime(String lifetime) {
+        assertThatThrownBy(() -> new AuthTokens(new MockEnvironment().withProperty("boxbox.auth.jwt-secret", SECRET)
+                .withProperty("boxbox.auth.extended-access-lifetime", lifetime), Clock.systemUTC()))
+                .isInstanceOf(RuntimeException.class);
     }
     @ParameterizedTest @ValueSource(strings = {"issuer", "audience", "subject", "zero", "future", "expired", "no-exp", "no-iat", "no-aud", "no-sub", "no-iss", "long-life", "not-before"})
     void rejectsSignedTokenWithInvalidRequiredClaims(String problem) {
