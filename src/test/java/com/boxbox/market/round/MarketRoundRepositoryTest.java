@@ -310,6 +310,12 @@ class MarketRoundRepositoryTest {
                     open_price BIGINT, high_price BIGINT, low_price BIGINT, close_price BIGINT, volume BIGINT,
                     PRIMARY KEY (interval_seconds, bucket_at, stock_id))
                 """);
+        jdbc.execute("ALTER TABLE market_rounds ADD stream_sequence BIGINT DEFAULT 0");
+        jdbc.execute("""
+                CREATE TABLE stream_events (id BIGINT PRIMARY KEY, round_id BIGINT, stream_sequence BIGINT,
+                    event_type VARCHAR(40), payload VARCHAR(1000), occurred_at DATETIME(6),
+                    published_at DATETIME(6), expires_at DATETIME(6))
+                """);
         var executions = new MarketOrderService(new MarketOrderRepository(jdbc),
                 new MarketRoundService(repository, json, 2026), json, Clock.fixed(now.plusSeconds(1), ZoneOffset.UTC));
         var order = json.createObjectNode().put("quoteId", buy.quoteId());
@@ -344,6 +350,8 @@ class MarketRoundRepositoryTest {
         assertEquals(409, closed.status());
         assertEquals("MARKET_CLOSED", closed.body().path("error").path("code").stringValue());
         assertEquals(2, jdbc.queryForObject("SELECT COUNT(*) FROM coin_ledger", Integer.class));
+        assertEquals(2, jdbc.queryForObject("SELECT COUNT(*) FROM stream_events WHERE event_type = 'PRICE_UPDATED'",
+                Integer.class));
     }
 
     private void addStockFixtures() {

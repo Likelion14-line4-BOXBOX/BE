@@ -62,6 +62,7 @@ public class MarketSettlementExecution {
             settleUser(roundId, round, user, snapshot.toString(), utc(now), drivers);
         }
         publishRoundRankings(roundId, round, utc(now));
+        publishSeasonRankings(roundId, round, utc(now));
         jdbc.update("""
                 UPDATE market_rounds SET settlement_status = 'COMPLETED', settlement_completed_at = ?,
                     ranking_published_at = ?, updated_at = ?
@@ -92,6 +93,51 @@ public class MarketSettlementExecution {
                 FROM user_settlements
                 WHERE round_id = ? AND settlement_version = ? AND status = 'COMPLETED' AND %s IS NOT NULL
                 """.formatted(metric, metric), snapshotId, roundId, round.version());
+        return snapshotId;
+    }
+
+    private void publishSeasonRankings(BigDecimal roundId, Round round, LocalDateTime now) {
+        long assets = createSeasonRanking(round.season(), "TOTAL_ASSETS", "total_assets", now);
+        long returns = createSeasonRanking(round.season(), "RETURN_RATE", "return_rate", now);
+        jdbc.update("""
+                UPDATE user_settlements s
+                LEFT JOIN ranking_entries a ON a.snapshot_id = ? AND a.user_id = s.user_id
+                LEFT JOIN ranking_entries r ON r.snapshot_id = ? AND r.user_id = s.user_id
+                SET s.season_rank = a.`rank`, s.season_return_rate = r.return_rate
+                WHERE s.round_id = ? AND s.settlement_version = ?
+                """, assets, returns, roundId, round.version());
+    }
+
+    private long createSeasonRanking(int season, String type, String metric, LocalDateTime now) {
+        long snapshotId = nextId();
+        jdbc.update("""
+                INSERT INTO ranking_snapshots (id, season_year, scope, type, status, snapshot_at, published_at)
+                VALUES (?, ?, 'SEASON', ?, 'PUBLISHED', ?, ?)
+                """, snapshotId, season, type, now, now);
+        jdbc.update("""
+                INSERT INTO ranking_entries (snapshot_id, user_id, `rank`, total_assets, round_pnl, return_rate)
+                WITH versions AS (
+                    SELECT s.user_id, s.round_id, s.ending_assets, s.round_pnl, s.id, r.round_number,
+                        ROW_NUMBER() OVER (PARTITION BY s.user_id, s.round_id
+                            ORDER BY s.settlement_version DESC, s.id DESC) AS version_order
+                    FROM user_settlements s
+                    JOIN market_rounds m ON m.id = s.round_id
+                    JOIN races r ON r.id = m.race_id
+                    WHERE m.season_year = ? AND s.status IN ('COMPLETED', 'PUBLISHED')
+                        AND s.published_at <= ? AND s.ending_assets IS NOT NULL
+                ), latest AS (
+                    SELECT v.*, ROW_NUMBER() OVER (PARTITION BY v.user_id ORDER BY v.round_number DESC, v.id DESC) AS seq
+                    FROM versions v WHERE v.version_order = 1
+                ), metrics AS (
+                    SELECT l.user_id, l.ending_assets AS total_assets, l.round_pnl,
+                        ROUND(100.0 * (CAST(l.ending_assets AS DECIMAL(24, 0)) - b.starting_assets)
+                            / NULLIF(b.starting_assets, 0), 8) AS return_rate
+                    FROM latest l LEFT JOIN user_season_baselines b ON b.user_id = l.user_id AND b.season_year = ?
+                    WHERE l.seq = 1
+                )
+                SELECT ?, user_id, RANK() OVER (ORDER BY %s DESC), total_assets, round_pnl, return_rate
+                FROM metrics WHERE %s IS NOT NULL
+                """.formatted(metric, metric), season, now, season, snapshotId);
         return snapshotId;
     }
 
