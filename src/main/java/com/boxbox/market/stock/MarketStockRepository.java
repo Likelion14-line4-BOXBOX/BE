@@ -31,6 +31,14 @@ public class MarketStockRepository {
         return find(" AND s.driver_id = :driverId", params).stream().findFirst();
     }
 
+    int lastRank(BigInteger roundId, int season) {
+        return jdbc.queryForObject("""
+                SELECT GREATEST(COUNT(*), COALESCE(MAX(base_rank), 0))
+                FROM market_stocks
+                WHERE round_id = :roundId AND season_year = :season
+                """, roundParameters(roundId, season), Integer.class);
+    }
+
     private static MapSqlParameterSource roundParameters(BigInteger roundId, int season) {
         return new MapSqlParameterSource()
                 .addValue("roundId", new BigDecimal(roundId))

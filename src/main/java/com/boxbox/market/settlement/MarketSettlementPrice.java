@@ -15,8 +15,8 @@ public record MarketSettlementPrice(int positionScore, int resultBonus, int fina
         return fromScores(startingPrice, positionScore, resultBonus);
     }
 
-    public static MarketSettlementPrice retirement(BigInteger startingPrice) {
-        return fromScores(startingPrice, MIN_SCORE, 0);
+    public static MarketSettlementPrice retirement(BigInteger startingPrice, int baseRank, int finishRank) {
+        return calculate(startingPrice, baseRank, finishRank, 0);
     }
 
     private static MarketSettlementPrice fromScores(BigInteger startingPrice, int positionScore, int resultBonus) {

@@ -74,11 +74,11 @@ public class MarketStockService {
         var row = stocks.findByDriver(roundKey, round.season(), driverKey)
                 .orElseThrow(MarketStockService::stockNotFound);
         var item = toItem(row, isTradable(round, now));
-        return new MarketStockResponses.Detail(item, settlementScenarios(item, detail.ruleSnapshot()));
+        return new MarketStockResponses.Detail(item, settlementScenarios(item, detail.ruleSnapshot(), stocks.lastRank(roundKey, round.season())));
     }
 
     private List<MarketStockResponses.SettlementScenario> settlementScenarios(
-            MarketStockResponses.Item item, String snapshot) {
+            MarketStockResponses.Item item, String snapshot, int lastRank) {
         var bonuses = json.readTree(snapshot).path("resultBonusByRank");
         if (!bonuses.isMissingNode() && (!bonuses.isArray() || bonuses.size() > 65_535)) {
             throw invalidSettlementRules();
@@ -111,7 +111,7 @@ public class MarketStockService {
             scenarios.add(scenario(finishRank,
                     MarketSettlementPrice.calculate(item.startingPrice(), item.baseRank(), finishRank, resultBonus)));
         }
-        scenarios.add(scenario(null, MarketSettlementPrice.retirement(item.startingPrice())));
+        scenarios.add(scenario(null, MarketSettlementPrice.retirement(item.startingPrice(), baseRank, lastRank)));
         return List.copyOf(scenarios);
     }
 
