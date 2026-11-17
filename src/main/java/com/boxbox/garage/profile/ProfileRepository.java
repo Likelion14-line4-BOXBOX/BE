@@ -18,9 +18,7 @@ import org.springframework.stereotype.Repository;
 @RequiredArgsConstructor
 public class ProfileRepository {
     private final JdbcTemplate jdbc;
-
-    public Optional<ProfileResponse> findActiveProfile(String loginId) {
-        return jdbc.query("""
+    private static final String PROFILE = """
                 SELECT u.id, u.nickname, u.bio, u.avatar_asset_id, u.show_market_assets,
                        u.created_at, u.onboarding_completed,
                        t.id AS team_id, t.name AS team_name, t.championship_rank AS team_rank,
@@ -31,8 +29,17 @@ public class ProfileRepository {
                 LEFT JOIN teams t ON t.id = u.favorite_team_id
                 LEFT JOIN drivers d ON d.id = u.favorite_driver_id
                 LEFT JOIN teams dt ON dt.id = d.team_id
-                WHERE u.login_id = ? AND u.status = 'ACTIVE' AND u.deleted_at IS NULL
-                """, (rs, row) -> mapProfile(rs), loginId).stream().findFirst();
+                """;
+
+    public Optional<ProfileResponse> findActiveProfile(String loginId) {
+        return jdbc.query(PROFILE + " WHERE u.login_id = ? AND u.status = 'ACTIVE' AND u.deleted_at IS NULL",
+                (rs, row) -> mapProfile(rs), loginId).stream().findFirst();
+    }
+
+    /** 개러지의 대상 조회다. 응답 공개 범위는 호출자가 별도 DTO로 제한한다. */
+    public Optional<ProfileResponse> findGarageProfile(long userId) {
+        return jdbc.query(PROFILE + " WHERE u.id=? AND u.status IN ('ACTIVE','SUSPENDED') AND u.deleted_at IS NULL",
+                (rs, row) -> mapProfile(rs), userId).stream().findFirst();
     }
 
     public boolean lockActiveUser(String loginId) {
