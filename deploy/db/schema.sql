@@ -294,7 +294,7 @@ CREATE TABLE `ranking_snapshots` (
   KEY `ix_ranking_snapshots_1` (`season_year`, `scope`, `type`, `status`, `snapshot_at`, `id`),
   CONSTRAINT `fk_ranking_snapshots_1` FOREIGN KEY (`round_id`, `season_year`) REFERENCES `market_rounds` (`id`, `season_year`),
   CONSTRAINT `fk_ranking_snapshots_2` FOREIGN KEY (`previous_snapshot_id`) REFERENCES `ranking_snapshots` (`id`),
-  CONSTRAINT `ck_ranking_snapshots_scope` CHECK ((`scope`='ROUND' AND `round_id` IS NOT NULL AND `type` IN ('ASSET','ROUND_RETURN','RANK_GAIN')) OR (`scope`='SEASON' AND `round_id` IS NULL AND `type` IN ('ASSET','SEASON_RETURN'))),
+  CONSTRAINT `ck_ranking_snapshots_scope` CHECK ((`scope`='ROUND' AND `round_id` IS NOT NULL AND `type` IN ('ASSET','ROUND_RETURN','RANK_GAIN','TOTAL_ASSETS','RETURN_RATE')) OR (`scope`='SEASON' AND `round_id` IS NULL AND `type` IN ('ASSET','SEASON_RETURN','TOTAL_ASSETS','RETURN_RATE'))),
   CONSTRAINT `ck_ranking_snapshots_status` CHECK (`status` IN ('BUILDING','PUBLISHED','SUPERSEDED'))
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='랭킹 집계 기준점';
 
