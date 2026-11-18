@@ -1,6 +1,5 @@
 package com.boxbox.garage.overview;
 
-import com.boxbox.common.api.ApiException;
 import com.boxbox.common.api.ApiResponse;
 import com.boxbox.garage.overview.dto.GarageResponse;
 import jakarta.servlet.http.HttpServletRequest;
@@ -20,7 +19,6 @@ class GarageController {
     @GetMapping("/api/users/{userId}/garage")
     ApiResponse<GarageResponse> get(@PathVariable String userId, @RequestParam Map<String, String> params, HttpServletRequest request) {
         Principal principal = request.getUserPrincipal();
-        if (principal == null) throw ApiException.unauthorized();
-        return ApiResponse.success(service.get(principal.getName(), userId, params));
+        return ApiResponse.success(service.get(principal == null ? null : principal.getName(), userId, params));
     }
 }

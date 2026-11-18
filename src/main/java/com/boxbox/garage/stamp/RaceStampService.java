@@ -25,7 +25,7 @@ public class RaceStampService {
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public RaceStampsResponse list(String loginId, String userId, Map<String, String> params) {
-        if (loginId == null || loginId.isBlank() || !repository.authenticated(loginId)) throw ApiException.unauthorized();
+        if (loginId != null && (loginId.isBlank() || !repository.authenticated(loginId))) throw ApiException.unauthorized();
         long target = BoardFilter.parseId(userId, "userId");
         if (!Set.of("season").containsAll(params.keySet())) throw ApiException.invalidRequest("지원하지 않는 조회 조건입니다.");
         int season = activeSeason;

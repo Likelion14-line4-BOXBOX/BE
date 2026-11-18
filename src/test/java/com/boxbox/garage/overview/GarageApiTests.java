@@ -137,10 +137,40 @@ class GarageApiTests {
         verifyNoInteractions(market);
     }
 
-    @Test void anonymousAndForgedHeadersAreNotAuthentication() throws Exception {
-        mvc.perform(get("/api/users/1/garage")).andExpect(status().isUnauthorized());
-        mvc.perform(get("/api/users/1/garage").header("X-User-Id", "1")).andExpect(status().isUnauthorized());
+    @Test void anonymousSeesFavoritesAndStampsButCannotImpersonateOwnerWithHeaders() throws Exception {
+        for (var request : java.util.List.of(get("/api/users/1/garage"),
+                get("/api/users/1/garage").header("X-User-Id", "1"))) {
+            mvc.perform(request).andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.isOwner").value(false))
+                    .andExpect(jsonPath("$.data.profile.favoriteTeam.teamId").value("1"))
+                    .andExpect(jsonPath("$.data.profile.favoriteDriver.driverId").value("11"))
+                    .andExpect(jsonPath("$.data.profile.showMarketAssets").doesNotExist())
+                    .andExpect(jsonPath("$.data.profile.loginId").doesNotExist())
+                    .andExpect(jsonPath("$.data.profile.passwordHash").doesNotExist())
+                    .andExpect(jsonPath("$.data.marketSummary").value(nullValue()))
+                    .andExpect(jsonPath("$.data.stampSummary.watchedCount").value(1));
+        }
+        verifyNoInteractions(market);
+    }
+
+    @Test void anonymousCanReadPublicAssetsButInvalidBearerIsStillRejected() throws Exception {
+        mvc.perform(get("/api/users/2/garage")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.isOwner").value(false))
+                .andExpect(jsonPath("$.data.marketSummary.totalAssets").value(1037000))
+                .andExpect(jsonPath("$.data.profile.showMarketAssets").doesNotExist());
+        verify(market).find(2);
+        clearInvocations(market);
         mvc.perform(get("/api/users/1/garage").header("Authorization", "Bearer viewer")).andExpect(status().isUnauthorized());
+        verifyNoInteractions(market);
+    }
+
+    @Test void anonymousValidatesTargetAndQueryAndCannotUseOwnProfileEndpoints() throws Exception {
+        mvc.perform(get("/api/users/0/garage")).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/users/999/garage")).andExpect(status().isNotFound());
+        mvc.perform(get("/api/users/1/garage?isOwner=true")).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/me")).andExpect(status().isUnauthorized());
+        mvc.perform(patch("/api/me").contentType("application/json").content("{\"showMarketAssets\":true}"))
+                .andExpect(status().isUnauthorized());
         verifyNoInteractions(market);
     }
 
@@ -169,6 +199,7 @@ class GarageApiTests {
         var before = jdbc.queryForList("SELECT * FROM chat_participants ORDER BY room_id,user_id");
         var profile = jdbc.queryForList("SELECT * FROM users ORDER BY id");
         var result = garage.get("other", "1", Map.of());
+        assertThat(garage.get(null, "1", Map.of())).isEqualTo(result);
         assertThat(result.stampSummary().watchedCount()).isEqualTo(1);
         assertThat(result.stampSummary().totalRaces()).isEqualTo(3);
         assertThat(jdbc.queryForList("SELECT * FROM chat_participants ORDER BY room_id,user_id")).isEqualTo(before);

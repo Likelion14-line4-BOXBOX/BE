@@ -81,12 +81,22 @@ class RaceStampApiTests {
                 .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
     }
 
-    @Test void anonymousAndForgedHeadersAreNotAuthentication() throws Exception {
-        mvc.perform(get("/api/users/1/race-stamps")).andExpect(status().isUnauthorized());
-        mvc.perform(get("/api/users/1/race-stamps").header("X-User-Id", "1"))
-                .andExpect(status().isUnauthorized());
+    @Test void anonymousReadsTargetsStoredStampsAndIgnoresForgedIdentity() throws Exception {
+        mvc.perform(get("/api/users/1/race-stamps?season=2026"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.watchedCount").value(1))
+                .andExpect(jsonPath("$.data.items[0].recordType").value("WATCHED"));
+        mvc.perform(get("/api/users/2/race-stamps?season=2026").header("X-User-Id", "1"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.watchedCount").value(0));
         mvc.perform(get("/api/users/1/race-stamps").header("Authorization", "Bearer viewer"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test void anonymousKeepsValidationAndEmptySeasonBehavior() throws Exception {
+        mvc.perform(get("/api/users/0/race-stamps")).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/users/999/race-stamps")).andExpect(status().isNotFound());
+        mvc.perform(get("/api/users/1/race-stamps?season=26")).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/users/1/race-stamps?season=2099")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.watchedCount").value(0)).andExpect(jsonPath("$.data.items").isEmpty());
     }
 
     @ParameterizedTest @ValueSource(strings = {"0", "-1", "u001", "1.0", "9223372036854775808"})
@@ -118,6 +128,7 @@ class RaceStampApiTests {
         var before = jdbc.queryForList("SELECT * FROM chat_participants ORDER BY room_id,user_id");
         stamps.list("viewer", "1", Map.of("season", "2026"));
         stamps.list("other", "1", Map.of("season", "2025"));
+        stamps.list(null, "1", Map.of("season", "2026"));
         assertThat(jdbc.queryForList("SELECT * FROM chat_participants ORDER BY room_id,user_id")).isEqualTo(before);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM chat_messages", Long.class)).isZero();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM stream_events", Long.class)).isZero();

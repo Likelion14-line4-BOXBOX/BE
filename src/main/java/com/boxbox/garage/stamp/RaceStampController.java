@@ -1,6 +1,5 @@
 package com.boxbox.garage.stamp;
 
-import com.boxbox.common.api.ApiException;
 import com.boxbox.common.api.ApiResponse;
 import com.boxbox.garage.stamp.dto.RaceStampsResponse;
 import jakarta.servlet.http.HttpServletRequest;
@@ -20,7 +19,6 @@ class RaceStampController {
     @GetMapping("/api/users/{userId}/race-stamps")
     ApiResponse<RaceStampsResponse> list(@PathVariable String userId, @RequestParam Map<String, String> params, HttpServletRequest request) {
         Principal principal = request.getUserPrincipal();
-        if (principal == null) throw ApiException.unauthorized();
-        return ApiResponse.success(service.list(principal.getName(), userId, params));
+        return ApiResponse.success(service.list(principal == null ? null : principal.getName(), userId, params));
     }
 }
