@@ -9,13 +9,13 @@ import java.util.List;
 
 record HomeResponse(Race nextRace, Session nextSession, ChatRoom liveChatRoom, MarketRound marketRound,
                     List<FeaturedPost> featuredPosts, MarketSummary myMarketSummary) {
-    record Race(String raceId, int season, int roundNumber, String name, String countryName, String circuitName,
+    record Race(String raceId, int season, int roundNumber, String name, String nameEn, String countryName, String circuitName,
                 String circuitKey, Instant scheduledStartAt, Instant actualEndAt, String status,
                 Instant weekendStartsAt, Instant weekendEndsAt) {}
 
-    record Session(String sessionId, String name, Instant startsAt) {}
+    record Session(String sessionId, String name, String nameEn, Instant startsAt) {}
 
-    record ChatRoom(String roomId, String raceId, String raceName, String status, long onlineCount,
+    record ChatRoom(String roomId, String raceId, String raceName, String raceNameEn, String status, long onlineCount,
                     Instant opensAt, Instant closesAt) {}
 
     record MarketRound(String roundId, String raceId, int season, int roundNumber, String raceName, String status,

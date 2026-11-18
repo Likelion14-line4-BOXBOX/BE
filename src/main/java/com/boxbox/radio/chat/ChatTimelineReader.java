@@ -1,5 +1,7 @@
 package com.boxbox.radio.chat;
 
+import com.boxbox.race.SessionNames;
+
 import com.boxbox.common.api.ApiException;
 import com.boxbox.radio.chat.dto.ChatResponses.Marker;
 import java.time.Instant;
@@ -20,8 +22,8 @@ class ChatTimelineReader {
 
     List<Marker> markers(long roomId, long raceId, long sequence, Instant lower, Instant upper, boolean inclusiveUpper) {
         var markers = new LinkedHashMap<String, Marker>();
-        var sessions = jdbc.query("SELECT id,name,actual_starts_at,actual_ends_at FROM race_sessions WHERE race_id=?",
-                (rs, row) -> new Session(rs.getString("id"), rs.getString("name"), ChatRepository.instant(rs, "actual_starts_at"),
+        var sessions = jdbc.query("SELECT id,name,type,session_number,actual_starts_at,actual_ends_at FROM race_sessions WHERE race_id=?",
+                (rs, row) -> new Session(rs.getString("id"), SessionNames.display(rs.getString("type"),rs.getInt("session_number"),rs.getString("name")), rs.getString("name"), ChatRepository.instant(rs, "actual_starts_at"),
                         ChatRepository.instant(rs, "actual_ends_at")), raceId);
         for (var session : sessions) {
             if (within(session.start(), lower, upper, inclusiveUpper)) put(markers, new Marker("session_" + session.id() + "_start", session.id(), session.name(), session.start()));
@@ -44,6 +46,8 @@ class ChatTimelineReader {
                         || (sessionId != null && sessions.stream().noneMatch(session -> session.id().equals(sessionId)))) throw new IllegalArgumentException();
                 for (var session : sessions) {
                     if (!session.id().equals(sessionId)) continue;
+                    if (label.equals(session.originalName())) label = session.name();
+                    else if (label.equals(session.originalName() + " 종료")) label = session.name() + " 종료";
                     if (event.at().equals(session.start())) markerId = "session_" + sessionId + "_start";
                     else if (event.at().equals(session.end())) markerId = "session_" + sessionId + "_end";
                 }
@@ -64,6 +68,6 @@ class ChatTimelineReader {
     private static boolean within(Instant at, Instant lower, Instant upper, boolean inclusiveUpper) {
         return at != null && (lower == null || !at.isBefore(lower)) && (at.isBefore(upper) || inclusiveUpper && at.equals(upper));
     }
-    private record Session(String id, String name, Instant start, Instant end) { }
+    private record Session(String id, String name, String originalName, Instant start, Instant end) { }
     private record Event(long id, String payload, Instant at) { }
 }

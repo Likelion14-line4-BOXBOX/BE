@@ -10,9 +10,9 @@ public interface BoardRepository extends Repository<Board, Long> {
     boolean existsByIdAndActiveTrue(Long id);
 
     @Query(value = """
-            SELECT b.id AS boardId, b.type AS type, b.name AS name,
+            SELECT b.id AS boardId, b.type AS type, COALESCE(
                    """ + RadioNameSql.BOARD_NAME_KO + """
-                   AS nameKo,
+                   ,b.name) AS name,
                    b.team_id AS teamId, b.display_order AS displayOrder,
                    COUNT(p.id) AS postCount
             FROM boards b
@@ -37,7 +37,6 @@ public interface BoardRepository extends Repository<Board, Long> {
         Long getBoardId();
         String getType();
         String getName();
-        String getNameKo();
         Long getTeamId();
         Integer getDisplayOrder();
         Long getPostCount();

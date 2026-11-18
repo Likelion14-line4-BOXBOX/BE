@@ -34,7 +34,7 @@ class PostSearchService {
         repository.validate(filter);
         var page = page(filter, viewer);
         return new PostSearchResponse(page.rows().stream().map(row ->
-                new PostSearchResponse.Item(row.summary(), row.boardName(), row.boardNameKo(), row.archived())).toList(),
+                new PostSearchResponse.Item(row.summary(), row.boardName(), row.archived())).toList(),
                 page.total(), page.nextCursor(), page.hasNext());
     }
 

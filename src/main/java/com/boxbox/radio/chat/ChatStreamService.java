@@ -1,5 +1,7 @@
 package com.boxbox.radio.chat;
 
+import com.boxbox.race.SessionNames;
+
 import com.boxbox.common.api.ApiException;
 import com.boxbox.radio.chat.dto.ChatResponses;
 import com.boxbox.radio.post.dto.PostDetailResponse.Author;
@@ -124,8 +126,8 @@ class ChatStreamService {
             if (payload.get("markerId") instanceof String id) recorded.add(id);
             if (payload.get("sessionId") != null) recorded.add(payload.get("sessionId") + "@" + ChatRepository.instant(rs, "occurred_at"));
         }, room.id());
-        var actual = jdbc.query("SELECT id,name,actual_starts_at,actual_ends_at FROM race_sessions WHERE race_id=? ORDER BY id", (rs, row) ->
-                new ActualSession(rs.getString("id"), rs.getString("name"), ChatRepository.instant(rs, "actual_starts_at"),
+        var actual = jdbc.query("SELECT id,name,type,session_number,actual_starts_at,actual_ends_at FROM race_sessions WHERE race_id=? ORDER BY id", (rs, row) ->
+                new ActualSession(rs.getString("id"), SessionNames.display(rs.getString("type"),rs.getInt("session_number"),rs.getString("name")), ChatRepository.instant(rs, "actual_starts_at"),
                         ChatRepository.instant(rs, "actual_ends_at")), room.raceId());
         var markers = new ArrayList<ChatResponses.Marker>();
         for (var session : actual) {

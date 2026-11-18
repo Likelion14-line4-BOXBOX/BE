@@ -7,10 +7,10 @@ import org.springframework.data.repository.query.Param;
 
 public interface BoardTagRepository extends Repository<BoardTag, Long> {
     @Query(value = """
-            SELECT t.id AS id,t.name AS name,t.tag_group AS tagGroup,
-                   t.is_active AS active,t.display_order AS displayOrder,
+            SELECT t.id AS id,COALESCE(
             """ + RadioNameSql.TAG_NAME_KO + """
-                   AS nameKo
+                   ,t.name) AS name,t.tag_group AS tagGroup,
+                   t.is_active AS active,t.display_order AS displayOrder
             FROM board_tags t WHERE t.board_id=:boardId ORDER BY t.display_order,t.id
             """, nativeQuery = true)
     List<Summary> findSummaries(@Param("boardId") Long boardId);
@@ -18,7 +18,6 @@ public interface BoardTagRepository extends Repository<BoardTag, Long> {
     interface Summary {
         Long getId();
         String getName();
-        String getNameKo();
         String getTagGroup();
         Boolean getActive();
         Integer getDisplayOrder();

@@ -6,15 +6,15 @@ public final class RadioNameSql {
 
     public static final String BOARD_NAME_KO = """
             (CASE WHEN b.type='TEAM' THEN
-                (SELECT CONCAT(rt.name_ko,' 게시판') FROM teams rt WHERE rt.id=b.team_id AND rt.name_ko IS NOT NULL)
+                (SELECT CONCAT(TRIM(rt.name_ko),' 게시판') FROM teams rt WHERE rt.id=b.team_id AND NULLIF(TRIM(rt.name_ko),'') IS NOT NULL)
             ELSE NULL END)
             """;
 
     public static final String TAG_NAME_KO = """
             (CASE WHEN t.tag_group='DRIVER' THEN
-                (SELECT rd.name_ko FROM drivers rd WHERE rd.id=t.driver_id)
+                (SELECT NULLIF(TRIM(rd.name_ko),'') FROM drivers rd WHERE rd.id=t.driver_id)
             WHEN t.tag_group='TEAM' THEN
-                (SELECT rt.name_ko FROM boards rb JOIN teams rt ON rt.id=rb.team_id WHERE rb.id=t.board_id)
+                (SELECT NULLIF(TRIM(rt.name_ko),'') FROM boards rb JOIN teams rt ON rt.id=rb.team_id WHERE rb.id=t.board_id)
             ELSE NULL END)
             """;
 }

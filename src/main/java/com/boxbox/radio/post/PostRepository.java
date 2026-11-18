@@ -139,8 +139,8 @@ class PostRepository {
 
     List<Tag> tags(Long tagId) {
         if (tagId == null) return List.of();
-        return jdbc.query("SELECT t.id,t.name," + RadioNameSql.TAG_NAME_KO + " AS name_ko FROM board_tags t WHERE t.id=?",
-                (rs, row) -> new Tag(rs.getString("id"), rs.getString("name"), rs.getString("name_ko")), tagId);
+        return jdbc.query("SELECT t.id,COALESCE(" + RadioNameSql.TAG_NAME_KO + ",t.name) AS name FROM board_tags t WHERE t.id=?",
+                (rs, row) -> new Tag(rs.getString("id"), rs.getString("name")), tagId);
     }
 
     long reactionCount(long postId, String type) {

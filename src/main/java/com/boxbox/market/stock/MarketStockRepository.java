@@ -47,7 +47,7 @@ public class MarketStockRepository {
 
     private List<StockRow> find(String filter, MapSqlParameterSource params) {
         String sql = """
-                SELECT s.id, s.driver_id, d.name AS driver_name, d.car_number, s.team_id, t.name AS team_name,
+                SELECT s.id, s.driver_id, COALESCE(NULLIF(TRIM(d.name_ko),''),d.name) AS driver_name, d.car_number, s.team_id, COALESCE(NULLIF(TRIM(t.name_ko),''),t.name) AS team_name,
                        s.base_rank, s.starting_price, s.current_price, s.price_version,
                        s.updated_at, s.total_buy_quantity
                 FROM market_stocks s

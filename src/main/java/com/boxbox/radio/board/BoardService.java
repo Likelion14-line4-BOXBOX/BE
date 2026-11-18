@@ -22,7 +22,7 @@ public class BoardService {
         String type = filter.type() == null ? null : filter.type().name();
         var items = boardRepository.findSummaries(type, filter.teamId()).stream()
                 .map(board -> new BoardResponse(
-                        board.getBoardId().toString(), board.getType(), board.getName(), board.getNameKo(),
+                        board.getBoardId().toString(), board.getType(), board.getName(),
                         board.getTeamId() == null ? null : board.getTeamId().toString(),
                         board.getPostCount(), board.getDisplayOrder(),
                         viewer == null ? null : board.getTeamId() != null
@@ -38,7 +38,7 @@ public class BoardService {
             throw new ApiException(HttpStatus.NOT_FOUND, "BOARD_NOT_FOUND", "게시판을 찾을 수 없습니다.");
         }
         var items = boardTagRepository.findSummaries(boardId).stream()
-                .map(tag -> new BoardTagResponse(tag.getId().toString(), tag.getName(), tag.getNameKo(),
+                .map(tag -> new BoardTagResponse(tag.getId().toString(), tag.getName(),
                         tag.getTagGroup(), tag.getActive(), tag.getDisplayOrder()))
                 .toList();
         return new ItemsResponse<>(items);

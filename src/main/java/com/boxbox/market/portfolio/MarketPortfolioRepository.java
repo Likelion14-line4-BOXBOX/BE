@@ -49,7 +49,7 @@ class MarketPortfolioRepository {
 
     List<Holding> positions(BigInteger userId, BigInteger roundId) {
         return jdbc.query("""
-                SELECT s.driver_id, d.name AS driver_name, d.car_number, s.team_id, t.name AS team_name,
+                SELECT s.driver_id, COALESCE(NULLIF(TRIM(d.name_ko),''),d.name) AS driver_name, d.car_number, s.team_id, COALESCE(NULLIF(TRIM(t.name_ko),''),t.name) AS team_name,
                        p.quantity, p.total_cost, s.current_price, s.base_rank
                 FROM positions p
                 JOIN market_stocks s ON s.id = p.stock_id

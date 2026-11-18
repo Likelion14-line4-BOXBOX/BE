@@ -28,9 +28,9 @@ class PostSearchRepository {
             LEFT JOIN board_tags t ON t.id=p.tag_id AND t.board_id=p.board_id
             """;
     private static final String SELECT = PostSummaryReader.SELECT + """
-                ,b.name AS board_name,
+                ,COALESCE(
                 """ + RadioNameSql.BOARD_NAME_KO + """
-                AS board_name_ko,
+                ,b.name) AS board_name,
                 CASE WHEN t.id IS NOT NULL AND t.is_active=FALSE THEN TRUE ELSE FALSE END AS archived
             """;
 
@@ -120,10 +120,10 @@ class PostSearchRepository {
     }
 
     private Row map(ResultSet rs, Long viewer, boolean includeThumbnail) throws SQLException {
-        return new Row(summaries.map(rs, viewer, includeThumbnail), rs.getString("board_name"), rs.getString("board_name_ko"), rs.getBoolean("archived"));
+        return new Row(summaries.map(rs, viewer, includeThumbnail), rs.getString("board_name"), rs.getBoolean("archived"));
     }
 
     private static LocalDateTime utc(Instant value) { return LocalDateTime.ofInstant(value, ZoneOffset.UTC); }
     private NamedParameterJdbcTemplate named() { return new NamedParameterJdbcTemplate(jdbc); }
-    record Row(PostSummaryResponse summary, String boardName, String boardNameKo, boolean archived) { }
+    record Row(PostSummaryResponse summary, String boardName, boolean archived) { }
 }

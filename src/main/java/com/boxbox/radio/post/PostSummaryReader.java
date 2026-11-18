@@ -27,9 +27,9 @@ public class PostSummaryReader {
 
     static final String SELECT = """
             SELECT p.id,p.board_id,p.title,p.content,p.view_count,p.created_at,
-                t.id AS tag_id,t.name AS tag_name,
+                t.id AS tag_id,COALESCE(
                 """ + RadioNameSql.TAG_NAME_KO + """
-                AS tag_name_ko,
+                ,t.name) AS tag_name,
                 u.id AS author_id,u.nickname,u.avatar_asset_id,u.status AS author_status,u.deleted_at AS author_deleted,
                 (SELECT COUNT(*) FROM post_reactions r WHERE r.post_id=p.id AND r.type='LIKE') AS like_count,
                 (SELECT COUNT(*) FROM comments c WHERE c.post_id=p.id AND c.deleted_at IS NULL) AS comment_count,
@@ -58,7 +58,7 @@ public class PostSummaryReader {
         var author = new Author(rs.getString("author_id"), withdrawn ? "탈퇴한 사용자" : rs.getString("nickname"),
                 withdrawn ? "avatar_default" : rs.getString("avatar_asset_id"));
         String tagId = rs.getString("tag_id");
-        List<Tag> tags = tagId == null ? List.of() : List.of(new Tag(tagId, rs.getString("tag_name"), rs.getString("tag_name_ko")));
+        List<Tag> tags = tagId == null ? List.of() : List.of(new Tag(tagId, rs.getString("tag_name")));
         String key = rs.getString("thumbnail_key");
         String content = rs.getString("content");
         String preview = content.substring(0, content.offsetByCodePoints(0, Math.min(100, content.codePointCount(0, content.length()))));

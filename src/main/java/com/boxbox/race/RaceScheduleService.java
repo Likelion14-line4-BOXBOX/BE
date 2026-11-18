@@ -18,7 +18,7 @@ class RaceScheduleService {
 
     RacePage getRaces(int season, RaceStatus filter, int afterRound, int size) {
         String sql = """
-                SELECT id, season_year, round_number, name, country_name, circuit_name, circuit_key,
+                SELECT id, season_year, round_number, COALESCE(NULLIF(TRIM(name_ko),''),name) AS name, name AS name_en, country_name, circuit_name, circuit_key,
                        scheduled_start_at, actual_end_at, status
                 FROM races
                 WHERE season_year = :season AND round_number > :afterRound
@@ -36,7 +36,7 @@ class RaceScheduleService {
 
         List<RaceItem> items = query.query((row, rowNumber) -> new RaceItem(
                 row.getString("id"), row.getInt("season_year"), row.getInt("round_number"),
-                row.getString("name"), row.getString("country_name"), row.getString("circuit_name"),
+                row.getString("name"), row.getString("name_en"), row.getString("country_name"), row.getString("circuit_name"),
                 row.getString("circuit_key"), null, instant(row, "scheduled_start_at"),
                 instant(row, "actual_end_at"), RaceStatus.valueOf(row.getString("status"))))
                 .list();
@@ -59,7 +59,7 @@ class RaceScheduleService {
 
     record RacePage(List<RaceItem> items, String nextCursor, boolean hasNext) {}
 
-    record RaceItem(String raceId, int season, int roundNumber, String name, String countryName,
+    record RaceItem(String raceId, int season, int roundNumber, String name, String nameEn, String countryName,
                     String circuitName, String circuitKey, String circuitImageUrl, Instant scheduledStartAt,
                     Instant actualEndAt, RaceStatus status) {}
 }

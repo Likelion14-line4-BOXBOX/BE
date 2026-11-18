@@ -8,15 +8,15 @@ import java.util.List;
 public final class ChatResponses {
     private ChatResponses() { }
 
-    public record Room(String roomId, String raceId, String raceName, String raceNameKo, int roundNumber, String status,
+    public record Room(String roomId, String raceId, String raceName, String raceNameEn, int roundNumber, String status,
                        long onlineCount, Instant opensAt, Instant closesAt, long participantCount,
                        Instant weekendStartsAt, Instant weekendEndsAt) { }
 
-    public record RoomDetail(String roomId, String raceId, String raceName, String raceNameKo, int roundNumber, String status,
+    public record RoomDetail(String roomId, String raceId, String raceName, String raceNameEn, int roundNumber, String status,
                              long onlineCount, Instant opensAt, Instant closesAt, long participantCount,
                              Instant weekendStartsAt, Instant weekendEndsAt, boolean canSendMessage) {
         public static RoomDetail from(Room room, boolean canSend) {
-            return new RoomDetail(room.roomId(), room.raceId(), room.raceName(), room.raceNameKo(), room.roundNumber(), room.status(), room.onlineCount(),
+            return new RoomDetail(room.roomId(), room.raceId(), room.raceName(), room.raceNameEn(), room.roundNumber(), room.status(), room.onlineCount(),
                     room.opensAt(), room.closesAt(), room.participantCount(), room.weekendStartsAt(), room.weekendEndsAt(), canSend);
         }
     }
