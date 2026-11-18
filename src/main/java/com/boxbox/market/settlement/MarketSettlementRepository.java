@@ -23,7 +23,7 @@ class MarketSettlementRepository {
 
     List<Summary> find(String loginId, Integer season, Cursor cursor, int limit) {
         var sql = new StringBuilder("""
-                SELECT m.id AS round_id, m.season_year, r.name AS race_name, r.round_number,
+                SELECT m.id AS round_id, m.season_year, COALESCE(NULLIF(TRIM(r.name_ko),''),r.name) AS race_name, r.round_number,
                        s.status, s.round_start_assets, s.ending_assets, s.round_pnl, s.return_rate,
                        s.round_rank, s.settlement_proceeds, s.published_at
                 FROM user_settlements s
@@ -89,7 +89,7 @@ class MarketSettlementRepository {
 
     List<Item> findItems(Detail detail, JsonNode driverNames) {
         return jdbc.query("""
-                SELECT s.driver_id, d.name AS driver_name, i.base_rank, i.finish_rank,
+                SELECT s.driver_id, d.name AS driver_name, NULLIF(TRIM(d.name_ko),'') AS driver_name_ko, i.base_rank, i.finish_rank,
                        i.position_score, i.result_bonus, i.final_score, i.starting_price,
                        i.settlement_price, i.quantity, i.total_cost, i.proceeds, i.pnl
                 FROM user_settlement_items i
@@ -107,7 +107,7 @@ class MarketSettlementRepository {
                     JsonNode frozenName = driverNames.path(driverId);
                     String name = frozenName.isString() && !frozenName.stringValue().isBlank()
                             ? frozenName.stringValue() : row.getString("driver_name");
-                    return new Item(driverId, name, row.getInt("base_rank"),
+                    return new Item(driverId, row.getString("driver_name_ko") == null ? name : row.getString("driver_name_ko"), row.getInt("base_rank"),
                             row.getObject("finish_rank", Integer.class), row.getInt("position_score"),
                             row.getInt("result_bonus"), row.getInt("final_score"), integer(row, "starting_price"),
                             integer(row, "settlement_price"), integer(row, "quantity"), integer(row, "total_cost"),

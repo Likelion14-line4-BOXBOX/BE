@@ -11,6 +11,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -29,9 +30,26 @@ class MarketPortfolioRepository {
                 .stream().findFirst().orElseThrow(ApiException::unauthorized);
     }
 
+    Optional<Account> account(long userId) {
+        return jdbc.query("""
+                SELECT id, coin_balance FROM users
+                WHERE id = ? AND deleted_at IS NULL AND status IN ('ACTIVE', 'SUSPENDED')
+                """, (row, index) -> new Account(number(row, "id"), number(row, "coin_balance")), userId)
+                .stream().findFirst();
+    }
+
+    BigInteger stockValue(BigInteger userId, BigInteger roundId) {
+        // 요약에는 선수 표시 정보가 필요 없다. 큰 수량의 곱도 BIGINT에서 넘치지 않도록 평가한다.
+        return jdbc.queryForObject("""
+                SELECT COALESCE(SUM(CAST(p.quantity AS DECIMAL(65, 0)) * s.current_price), 0)
+                FROM positions p JOIN market_stocks s ON s.id = p.stock_id
+                WHERE p.user_id = ? AND s.round_id = ? AND p.quantity > 0
+                """, BigDecimal.class, new BigDecimal(userId), new BigDecimal(roundId)).toBigIntegerExact();
+    }
+
     List<Holding> positions(BigInteger userId, BigInteger roundId) {
         return jdbc.query("""
-                SELECT s.driver_id, d.name AS driver_name, d.car_number, s.team_id, t.name AS team_name,
+                SELECT s.driver_id, COALESCE(NULLIF(TRIM(d.name_ko),''),d.name) AS driver_name, d.car_number, s.team_id, COALESCE(NULLIF(TRIM(t.name_ko),''),t.name) AS team_name,
                        p.quantity, p.total_cost, s.current_price, s.base_rank
                 FROM positions p
                 JOIN market_stocks s ON s.id = p.stock_id
@@ -100,11 +118,11 @@ class MarketPortfolioRepository {
 
     Long seasonRank(BigInteger userId, int season, Instant now) {
         return jdbc.query("""
-                SELECT e.rank FROM ranking_entries e
+                SELECT e.`rank` FROM ranking_entries e
                 WHERE e.user_id = ? AND e.snapshot_id = (
                     SELECT id FROM ranking_snapshots
-                    WHERE season_year = ? AND scope = 'SEASON' AND type = 'TOTAL_ASSETS'
-                      AND published_at <= ?
+                    WHERE season_year = ? AND scope = 'SEASON' AND type IN ('ASSET', 'TOTAL_ASSETS')
+                      AND status = 'PUBLISHED' AND published_at <= ?
                     ORDER BY published_at DESC, id DESC LIMIT 1
                 )
                 """, (row, index) -> row.getLong("rank"),

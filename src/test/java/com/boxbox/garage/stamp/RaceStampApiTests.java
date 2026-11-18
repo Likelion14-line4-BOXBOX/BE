@@ -37,14 +37,14 @@ class RaceStampApiTests {
                 .andExpect(jsonPath("$.data.season").value(2026)).andExpect(jsonPath("$.data.watchedCount").value(1))
                 .andExpect(jsonPath("$.data.totalRaces").value(7)).andExpect(jsonPath("$.data.items.length()").value(7))
                 .andExpect(jsonPath("$.data.items[*].raceId").value(is(List.of("1", "2", "3", "4", "6", "7", "8"))))
-                .andExpect(jsonPath("$.data.items[0].length()").value(6))
+                .andExpect(jsonPath("$.data.items[0].length()").value(7))
                 .andExpect(jsonPath("$.data.items[0].recordType").value("WATCHED"))
                 .andExpect(jsonPath("$.data.items[0].source").value("CHAT"))
                 .andExpect(jsonPath("$.data.items[0].recordedAt").value("2026-11-01T00:00:00Z"))
                 .andExpect(jsonPath("$.data.items[2].recordType").value(nullValue()))
                 .andExpect(jsonPath("$.data.items[2].source").value(nullValue()))
                 .andExpect(jsonPath("$.data.items[2].recordedAt").value(nullValue()))
-                .andExpect(jsonPath("$.data.items[2].length()").value(6))
+                .andExpect(jsonPath("$.data.items[2].length()").value(7))
                 .andExpect(jsonPath("$.data.items[6].raceName").value("채팅방 없는 GP"))
                 .andExpect(jsonPath("$.data.items[6].recordedAt").value(nullValue()))
                 .andExpect(jsonPath("$.meta.requestId").isString()).andExpect(jsonPath("$.meta.serverTime").isString());
@@ -122,4 +122,21 @@ class RaceStampApiTests {
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM chat_messages", Long.class)).isZero();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM stream_events", Long.class)).isZero();
     }
+
+    @Test void stampsIncludeKoreanNamesForRacesWithOrWithoutRoomsAndDoNotChangeParticipation() throws Exception {
+        var before = jdbc.queryForList("SELECT * FROM chat_participants ORDER BY room_id,user_id");
+        jdbc.update("UPDATE races SET name='Las Vegas Grand Prix',name_ko='라스베이거스 그랑프리' WHERE id=1");
+        jdbc.update("UPDATE races SET name='Abu Dhabi Grand Prix',name_ko='아부다비 그랑프리' WHERE id=8");
+        String second = jdbc.queryForObject("SELECT name FROM races WHERE id=2",String.class);
+        mvc.perform(get("/api/users/1/race-stamps?season=2026").principal(() -> "viewer"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].raceName").value("라스베이거스 그랑프리"))
+                .andExpect(jsonPath("$.data.items[0].raceNameEn").value("Las Vegas Grand Prix"))
+                .andExpect(jsonPath("$.data.items[1].raceName").value(second))
+                .andExpect(jsonPath("$.data.items[1].raceNameEn").value(second))
+                .andExpect(jsonPath("$.data.items[6].raceName").value("아부다비 그랑프리"))
+                .andExpect(jsonPath("$.data.items[6].raceNameEn").value("Abu Dhabi Grand Prix"));
+        assertThat(jdbc.queryForList("SELECT * FROM chat_participants ORDER BY room_id,user_id")).isEqualTo(before);
+    }
+
 }

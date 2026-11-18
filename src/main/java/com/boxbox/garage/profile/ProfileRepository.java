@@ -18,21 +18,28 @@ import org.springframework.stereotype.Repository;
 @RequiredArgsConstructor
 public class ProfileRepository {
     private final JdbcTemplate jdbc;
-
-    public Optional<ProfileResponse> findActiveProfile(String loginId) {
-        return jdbc.query("""
+    private static final String PROFILE = """
                 SELECT u.id, u.nickname, u.bio, u.avatar_asset_id, u.show_market_assets,
                        u.created_at, u.onboarding_completed,
-                       t.id AS team_id, t.name AS team_name, t.championship_rank AS team_rank,
-                       d.id AS driver_id, d.name AS driver_name, d.car_number,
+                       t.id AS team_id, COALESCE(NULLIF(TRIM(t.name_ko),''),t.name) AS team_name, t.name AS team_name_en, t.championship_rank AS team_rank,
+                       d.id AS driver_id, COALESCE(NULLIF(TRIM(d.name_ko),''),d.name) AS driver_name, d.name AS driver_name_en, d.car_number,
                        d.championship_rank AS driver_rank, d.team_id AS driver_team_id,
-                       dt.name AS driver_team_name
+                       COALESCE(NULLIF(TRIM(dt.name_ko),''),dt.name) AS driver_team_name, dt.name AS driver_team_name_en
                 FROM users u
                 LEFT JOIN teams t ON t.id = u.favorite_team_id
                 LEFT JOIN drivers d ON d.id = u.favorite_driver_id
                 LEFT JOIN teams dt ON dt.id = d.team_id
-                WHERE u.login_id = ? AND u.status = 'ACTIVE' AND u.deleted_at IS NULL
-                """, (rs, row) -> mapProfile(rs), loginId).stream().findFirst();
+                """;
+
+    public Optional<ProfileResponse> findActiveProfile(String loginId) {
+        return jdbc.query(PROFILE + " WHERE u.login_id = ? AND u.status = 'ACTIVE' AND u.deleted_at IS NULL",
+                (rs, row) -> mapProfile(rs), loginId).stream().findFirst();
+    }
+
+    /** 개러지의 대상 조회다. 응답 공개 범위는 호출자가 별도 DTO로 제한한다. */
+    public Optional<ProfileResponse> findGarageProfile(long userId) {
+        return jdbc.query(PROFILE + " WHERE u.id=? AND u.status IN ('ACTIVE','SUSPENDED') AND u.deleted_at IS NULL",
+                (rs, row) -> mapProfile(rs), userId).stream().findFirst();
     }
 
     public boolean lockActiveUser(String loginId) {
@@ -85,10 +92,10 @@ public class ProfileRepository {
         String teamId = rs.getString("team_id");
         String driverId = rs.getString("driver_id");
         var team = teamId == null ? null : new ProfileResponse.Team(teamId,
-                rs.getString("team_name"), rs.getObject("team_rank", Integer.class));
+                rs.getString("team_name"), rs.getString("team_name_en"), rs.getObject("team_rank", Integer.class));
         var driver = driverId == null ? null : new ProfileResponse.Driver(driverId,
-                rs.getString("driver_name"), rs.getObject("car_number", Integer.class),
-                rs.getString("driver_team_id"), rs.getString("driver_team_name"),
+                rs.getString("driver_name"), rs.getString("driver_name_en"), rs.getObject("car_number", Integer.class),
+                rs.getString("driver_team_id"), rs.getString("driver_team_name"), rs.getString("driver_team_name_en"),
                 rs.getObject("driver_rank", Integer.class));
         return new ProfileResponse(rs.getString("id"), rs.getString("nickname"), rs.getString("bio"),
                 rs.getString("avatar_asset_id"), team, driver, rs.getBoolean("show_market_assets"),

@@ -1,6 +1,6 @@
 -- 게시글 통합 테스트 전용 DB. 운영 스키마는 루트 docs/erd/schema.mysql.all.sql을 적용한다.
-CREATE TABLE teams (id BIGINT PRIMARY KEY, code VARCHAR(40) UNIQUE NOT NULL, name VARCHAR(100) NOT NULL, display_order SMALLINT NOT NULL);
-CREATE TABLE drivers (id BIGINT PRIMARY KEY, name VARCHAR(100) NOT NULL, team_id BIGINT REFERENCES teams(id));
+CREATE TABLE teams (id BIGINT PRIMARY KEY, code VARCHAR(40) UNIQUE NOT NULL, name VARCHAR(100) NOT NULL, name_ko VARCHAR(120), display_order SMALLINT NOT NULL);
+CREATE TABLE drivers (id BIGINT PRIMARY KEY, name VARCHAR(100) NOT NULL, name_ko VARCHAR(120), team_id BIGINT REFERENCES teams(id));
 CREATE TABLE users (
     id BIGINT PRIMARY KEY, login_id VARCHAR(20) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL, nickname VARCHAR(20) NOT NULL UNIQUE,

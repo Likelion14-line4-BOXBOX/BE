@@ -42,7 +42,7 @@ class MarketRoundRepositoryTest {
         repository = new MarketRoundRepository(new NamedParameterJdbcTemplate(source));
         jdbc.execute("""
                 CREATE TABLE races (id BIGINT PRIMARY KEY, season_year INT,
-                    round_number INT, name VARCHAR(120), status VARCHAR(24))
+                    round_number INT, name VARCHAR(120), name_ko VARCHAR(120), status VARCHAR(24))
                 """);
         jdbc.execute("""
                 CREATE TABLE market_rounds (id BIGINT PRIMARY KEY, race_id BIGINT, season_year INT,
@@ -96,6 +96,7 @@ class MarketRoundRepositoryTest {
                 """
                 {"resultBonusByRank":[8,0,0,0,0,0,0,0,0]}
                 """);
+        jdbc.update("UPDATE market_stocks SET base_rank = 22 WHERE id = 2");
         var detail = service.detail("1", "1", close);
         assertEquals("1", detail.driver().driverId());
         assertFalse(detail.tradable());
@@ -106,7 +107,7 @@ class MarketRoundRepositoryTest {
         assertEquals(109, win.settlementPrice().intValueExact());
         var retirement = detail.settlementScenarios().getLast();
         assertNull(retirement.finishRank());
-        assertEquals(-30, retirement.positionScore());
+        assertEquals(-230, retirement.positionScore());
         assertEquals(0, retirement.resultBonus());
         assertEquals(-30, retirement.finalScore());
         assertEquals(70, retirement.settlementPrice().intValueExact());
@@ -115,16 +116,16 @@ class MarketRoundRepositoryTest {
         var middle = service.detail("1", "1", start).settlementScenarios();
         assertEquals(List.of(3, 5, 6, 9),
                 middle.subList(0, 4).stream().map(scenario -> scenario.finishRank()).toList());
-        assertEquals(-30, middle.getLast().positionScore());
+        assertEquals(-216, middle.getLast().positionScore());
 
         jdbc.update("UPDATE market_stocks SET base_rank = 21 WHERE id = 1");
         var bottom = service.detail("1", "1", start).settlementScenarios();
         assertEquals(List.of(18, 19, 20, 21),
                 bottom.subList(0, 4).stream().map(scenario -> scenario.finishRank()).toList());
-        assertEquals(-30, bottom.getLast().finalScore());
+        assertEquals(-21, bottom.getLast().finalScore());
 
         jdbc.update("UPDATE market_stocks SET base_rank = 22 WHERE id = 1");
-        assertEquals(-30, service.detail("1", "1", start).settlementScenarios().getLast().finalScore());
+        assertEquals(0, service.detail("1", "1", start).settlementScenarios().getLast().finalScore());
         assertEquals("STOCK_NOT_FOUND", assertThrows(ApiException.class,
                 () -> service.detail("1", "1", start.minusNanos(1))).getCode());
         assertEquals("STOCK_NOT_FOUND", assertThrows(ApiException.class,
@@ -356,15 +357,15 @@ class MarketRoundRepositoryTest {
 
     private void addStockFixtures() {
         addRound(1, 2026, "OPEN", "2026-11-16 00:00:00", "2026-11-17 00:00:00");
-        jdbc.execute("CREATE TABLE drivers (id BIGINT PRIMARY KEY, name VARCHAR(120), car_number INT)");
-        jdbc.execute("CREATE TABLE teams (id BIGINT PRIMARY KEY, name VARCHAR(120))");
+        jdbc.execute("CREATE TABLE drivers (id BIGINT PRIMARY KEY, name VARCHAR(120), name_ko VARCHAR(120), car_number INT)");
+        jdbc.execute("CREATE TABLE teams (id BIGINT PRIMARY KEY, name VARCHAR(120), name_ko VARCHAR(120))");
         jdbc.execute("""
                 CREATE TABLE market_stocks (id BIGINT PRIMARY KEY, round_id BIGINT, season_year INT,
                     driver_id BIGINT, team_id BIGINT, base_rank INT, starting_price BIGINT, current_price BIGINT,
                     price_version BIGINT, updated_at DATETIME(6), total_buy_quantity BIGINT)
                 """);
-        jdbc.update("INSERT INTO drivers VALUES (1, 'Driver A', 44), (2, 'Driver B', 63), (3, 'Driver C', 4)");
-        jdbc.update("INSERT INTO teams VALUES (10, 'Team A'), (20, 'Team B')");
+        jdbc.update("INSERT INTO drivers(id,name,car_number) VALUES (1, 'Driver A', 44), (2, 'Driver B', 63), (3, 'Driver C', 4)");
+        jdbc.update("INSERT INTO teams(id,name) VALUES (10, 'Team A'), (20, 'Team B')");
         jdbc.update("""
                 INSERT INTO market_stocks VALUES
                     (1, 1, 2026, 1, 10, 2, 100, 120, 1, '2026-11-16 00:00:00', 5),
@@ -374,7 +375,7 @@ class MarketRoundRepositoryTest {
     }
 
     private void addRound(int id, int season, String status, String openAt, String closeAt) {
-        jdbc.update("INSERT INTO races VALUES (?, ?, ?, ?, 'SCHEDULED')", id, season, id, "Grand Prix " + id);
+        jdbc.update("INSERT INTO races(id,season_year,round_number,name,status) VALUES (?, ?, ?, ?, 'SCHEDULED')", id, season, id, "Grand Prix " + id);
         jdbc.update("""
                 INSERT INTO market_rounds VALUES (?, ?, ?, ?, ?, ?, '2026-11-24 00:00:00', NULL, 'rule-1', 1, '{}', 'NOT_STARTED')
                 """, id, id, season, status, openAt, closeAt);

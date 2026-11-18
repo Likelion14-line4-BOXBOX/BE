@@ -8,6 +8,7 @@ CREATE TABLE `teams` (
   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT 'PK, AUTO_INCREMENT',
   `code` VARCHAR(40) NOT NULL,
   `name` VARCHAR(100) NOT NULL,
+  `name_ko` VARCHAR(100) NULL COMMENT '한국어 표시명; 미입력 NULL. 외부 동기화에서 덮어쓰지 않음',
   `description` VARCHAR(1000) NOT NULL DEFAULT '',
   `created_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'UTC 생성 시각',
   `updated_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'UTC 변경 시각; 애플리케이션 갱신',
@@ -27,6 +28,7 @@ CREATE TABLE `races` (
   `season_year` SMALLINT UNSIGNED NOT NULL COMMENT '시즌 연도; 별도 시즌 마스터 없음',
   `round_number` SMALLINT UNSIGNED NOT NULL,
   `name` VARCHAR(120) NOT NULL,
+  `name_ko` VARCHAR(120) NULL COMMENT '한국어 표시명; 미입력 NULL. 외부 동기화에서 덮어쓰지 않음',
   `country_name` VARCHAR(80) NOT NULL,
   `circuit_name` VARCHAR(120) NOT NULL,
   `weekend_starts_at` DATETIME(6) NOT NULL,
@@ -52,6 +54,7 @@ CREATE TABLE `drivers` (
   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT 'PK, AUTO_INCREMENT',
   `code` VARCHAR(40) NOT NULL,
   `name` VARCHAR(100) NOT NULL,
+  `name_ko` VARCHAR(100) NULL COMMENT '한국어 표시명; 미입력 NULL. 외부 동기화에서 덮어쓰지 않음',
   `description` VARCHAR(1000) NOT NULL DEFAULT '',
   `created_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'UTC 생성 시각',
   `updated_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'UTC 변경 시각; 애플리케이션 갱신',
@@ -86,7 +89,7 @@ CREATE TABLE `boards` (
   CONSTRAINT `ck_boards_team` CHECK ((`type`='TEAM' AND `team_id` IS NOT NULL) OR (`type` IN ('FREE','BEGINNER') AND `team_id` IS NULL))
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='게시판';
 
--- 그랑프리 세부 세션 | CM02, HM01, TR19~21. 세부 일정/실제 전환 DB 직접 입력; 외부 sessions/race_control 수집 없음
+-- 그랑프리 세부 세션 | CM02, HM01, TR19~21. 예정 일정은 OpenF1 sessions에서 동기화; 실제 전환은 별도로 기록
 CREATE TABLE `race_sessions` (
   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT 'PK, AUTO_INCREMENT',
   `race_id` BIGINT UNSIGNED NOT NULL,

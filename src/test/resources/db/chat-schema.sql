@@ -1,7 +1,7 @@
 -- H2 채팅 조회 전용 보강. MySQL은 루트 전체 ERD 32개 테이블을 그대로 사용한다.
 CREATE TABLE races (
     id BIGINT AUTO_INCREMENT PRIMARY KEY, season_year SMALLINT NOT NULL, round_number SMALLINT NOT NULL,
-    name VARCHAR(120) NOT NULL, country_name VARCHAR(80) NOT NULL, circuit_name VARCHAR(120) NOT NULL,
+    name VARCHAR(120) NOT NULL, name_ko VARCHAR(120), country_name VARCHAR(80) NOT NULL, circuit_name VARCHAR(120) NOT NULL,
     circuit_key VARCHAR(80) NOT NULL, weekend_starts_at TIMESTAMP NOT NULL, weekend_ends_at TIMESTAMP NOT NULL,
     scheduled_start_at TIMESTAMP, actual_end_at TIMESTAMP, status VARCHAR(24) NOT NULL DEFAULT 'SCHEDULED',
     UNIQUE(season_year,round_number)

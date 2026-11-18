@@ -74,6 +74,7 @@ public class MarketSettlementResultService {
             }
         }
 
+        int lastRank = Math.max(results.size(), usedRanks.stream().mapToInt(Integer::intValue).max().orElse(0));
         var matchedNumbers = new HashSet<Integer>();
         var items = new java.util.ArrayList<DriverResult>();
         for (var stock : stocks) {
@@ -87,7 +88,7 @@ public class MarketSettlementResultService {
                 return Optional.empty();
             }
             items.add(new DriverResult(stock.id(), stock.driverId(), stock.driverName(), stock.baseRank(),
-                    stock.startingPrice(), result.position(), retired));
+                    stock.startingPrice(), result.position() == null ? lastRank : result.position(), retired));
         }
         return Optional.of(List.copyOf(items));
     }
@@ -98,7 +99,7 @@ public class MarketSettlementResultService {
     public record DriverResult(BigInteger stockId, String driverId, String driverName, int baseRank,
                                BigInteger startingPrice, Integer finishRank, boolean retired) {
         public MarketSettlementPrice settlementPrice(int resultBonus) {
-            return retired ? MarketSettlementPrice.retirement(startingPrice)
+            return retired ? MarketSettlementPrice.retirement(startingPrice, baseRank, finishRank)
                     : MarketSettlementPrice.calculate(startingPrice, baseRank, finishRank, resultBonus);
         }
     }

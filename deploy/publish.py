@@ -80,7 +80,8 @@ def remote_release(config, revision, digest, initialize=False):
         token = run(['aws', 'ecr', 'get-login-password'])
         ssh(['sudo', 'docker', 'login', '--username', 'AWS', '--password-stdin', registry], input=token)
         try:
-            print(ssh([*runner, '--repository', config['ImageRepository'], '--revision', revision, '--digest', digest]))
+            print(ssh([*runner, '--repository', config['ImageRepository'], '--revision', revision, '--digest', digest,
+                        '--public-ip', config['PublicIp']]))
         finally:
             ssh(['sudo', 'docker', 'logout', registry])
         ssh(['rm', '--', remote_archive])

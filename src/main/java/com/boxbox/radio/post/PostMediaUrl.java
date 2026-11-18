@@ -8,16 +8,29 @@ import java.util.Arrays;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 @Component
 class PostMediaUrl {
+    static final String UPLOAD_PREFIX = "post-images/";
+    static final String UPLOAD_FILENAME = "[0-9a-f-]{36}\\.(jpg|png|webp)";
     private final String baseUrl;
+    private final String publicBaseUrl;
 
-    PostMediaUrl(@Value("${boxbox.posts.media-base-url:}") String baseUrl) {
+    PostMediaUrl(@Value("${boxbox.posts.media-base-url:}") String baseUrl,
+                 @Value("${boxbox.posts.media-public-base-url:}") String publicBaseUrl) {
         this.baseUrl = baseUrl.strip();
+        this.publicBaseUrl = publicBaseUrl.strip();
     }
 
     String resolve(String objectKey) {
+        if (objectKey != null && objectKey.startsWith(UPLOAD_PREFIX)
+                && objectKey.substring(UPLOAD_PREFIX.length()).matches(UPLOAD_FILENAME)) {
+            String path = "/api/media/" + objectKey;
+            return publicBaseUrl.isEmpty()
+                    ? ServletUriComponentsBuilder.fromCurrentContextPath().path(path).build().toUriString()
+                    : publicBaseUrl + path;
+        }
         try {
             URI base = URI.create(baseUrl);
             if (!("https".equalsIgnoreCase(base.getScheme()) || "http".equalsIgnoreCase(base.getScheme()))

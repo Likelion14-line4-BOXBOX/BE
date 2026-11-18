@@ -1,5 +1,6 @@
 package com.boxbox.market.preparation;
 
+import com.boxbox.race.RaceSessionSyncService;
 import java.time.Clock;
 import java.time.Instant;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,15 +18,21 @@ class MarketRoundPreparationJob {
     private final MarketRoundPreparationService preparation;
     private final MarketRoundPreparationRepository repository;
     private final Clock clock;
+    private final RaceSessionSyncService sessions;
+    private final boolean sessionSyncEnabled;
     private final int season;
     private final Instant firstRoundOpenAt;
 
     MarketRoundPreparationJob(MarketRoundPreparationService preparation, MarketRoundPreparationRepository repository,
-                              Clock clock, @Value("${boxbox.market.preparation.season}") int season,
+                              RaceSessionSyncService sessions, Clock clock,
+                              @Value("${boxbox.race.session-sync.enabled:true}") boolean sessionSyncEnabled,
+                              @Value("${boxbox.market.preparation.season}") int season,
                               @Value("${boxbox.market.preparation.first-round-open-at:}") String firstRoundOpenAt) {
         this.preparation = preparation;
         this.repository = repository;
         this.clock = clock;
+        this.sessions = sessions;
+        this.sessionSyncEnabled = sessionSyncEnabled;
         this.season = season;
         this.firstRoundOpenAt = firstRoundOpenAt.isBlank() ? null : Instant.parse(firstRoundOpenAt);
     }
@@ -44,6 +51,13 @@ class MarketRoundPreparationJob {
         var now = clock.instant();
         repository.advanceRounds(season, now);
         repository.fillPublicationTimes(season, now);
+    }
+
+    @Scheduled(fixedDelayString = "${boxbox.race.session-sync.interval:PT1H}", scheduler = "marketPreparationScheduler")
+    void syncRaceSessions() {
+        if (sessionSyncEnabled) {
+            sessions.sync(season);
+        }
     }
 
     @Scheduled(fixedDelayString = "${boxbox.market.preparation.interval:PT15M}", scheduler = "marketPreparationScheduler")

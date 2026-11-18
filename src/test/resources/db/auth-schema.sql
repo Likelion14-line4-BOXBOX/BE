@@ -1,6 +1,6 @@
 -- 인증 테스트 전용 H2 스키마. 운영 DDL은 기존 ERD를 사용한다.
-CREATE TABLE IF NOT EXISTS teams(id BIGINT PRIMARY KEY, name VARCHAR(100), championship_rank SMALLINT);
-CREATE TABLE IF NOT EXISTS drivers(id BIGINT PRIMARY KEY, name VARCHAR(100), team_id BIGINT, car_number SMALLINT, championship_rank SMALLINT);
+CREATE TABLE IF NOT EXISTS teams(id BIGINT PRIMARY KEY, name VARCHAR(100), name_ko VARCHAR(100), championship_rank SMALLINT);
+CREATE TABLE IF NOT EXISTS drivers(id BIGINT PRIMARY KEY, name VARCHAR(100), name_ko VARCHAR(100), team_id BIGINT, car_number SMALLINT, championship_rank SMALLINT);
 CREATE TABLE IF NOT EXISTS users(
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     login_id VARCHAR(20) NOT NULL UNIQUE,
