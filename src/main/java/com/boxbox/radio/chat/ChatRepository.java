@@ -22,7 +22,7 @@ import org.springframework.stereotype.Repository;
 class ChatRepository {
     private final JdbcTemplate jdbc;
     private static final String ROOMS = """
-            SELECT c.*,r.name AS race_name,r.round_number,r.weekend_starts_at,r.weekend_ends_at,
+            SELECT c.*,r.name AS race_name,r.name_ko AS race_name_ko,r.round_number,r.weekend_starts_at,r.weekend_ends_at,
                 (SELECT COUNT(*) FROM chat_participants p WHERE p.room_id=c.id) AS participant_count
             FROM chat_rooms c JOIN races r ON r.id=c.race_id
             """;
@@ -80,7 +80,7 @@ class ChatRepository {
     }
 
     private static Room room(ResultSet rs) throws SQLException {
-        return new Room(rs.getLong("id"), rs.getLong("race_id"), rs.getString("race_name"), rs.getInt("round_number"),
+        return new Room(rs.getLong("id"), rs.getLong("race_id"), rs.getString("race_name"), rs.getString("race_name_ko"), rs.getInt("round_number"),
                 rs.getString("status"), instant(rs, "opens_at"), instant(rs, "closes_at"), instant(rs, "weekend_starts_at"),
                 instant(rs, "weekend_ends_at"), rs.getLong("participant_count"), rs.getLong("stream_sequence"));
     }
@@ -93,6 +93,6 @@ class ChatRepository {
     static ApiException notFound() { return new ApiException(HttpStatus.NOT_FOUND, "CHAT_ROOM_NOT_FOUND", "채팅방을 찾을 수 없습니다."); }
     private NamedParameterJdbcTemplate named() { return new NamedParameterJdbcTemplate(jdbc); }
     record Viewer(long id, boolean active) { }
-    record Room(long id, long raceId, String raceName, int roundNumber, String storedStatus, Instant opensAt, Instant closesAt,
+    record Room(long id, long raceId, String raceName, String raceNameKo, int roundNumber, String storedStatus, Instant opensAt, Instant closesAt,
                 Instant weekendStartsAt, Instant weekendEndsAt, long participantCount, long sequence) { }
 }

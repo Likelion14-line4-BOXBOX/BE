@@ -10,6 +10,6 @@ public record PostDetailResponse(
         Boolean bookmarkedByMe, String content, List<Media> media, Instant updatedAt,
         boolean canEdit, boolean canDelete) {
     public record Author(String userId, String nickname, String avatarAssetId) { }
-    public record Tag(String tagId, String name) { }
+    public record Tag(String tagId, String name, String nameKo) { }
     public record Media(String mediaId, String url, int width, int height) { }
 }

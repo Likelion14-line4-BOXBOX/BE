@@ -1,5 +1,7 @@
 package com.boxbox.radio.post;
 
+import com.boxbox.radio.board.RadioNameSql;
+
 import com.boxbox.common.api.ApiException;
 import com.boxbox.radio.post.dto.PostSummaryResponse;
 import java.sql.ResultSet;
@@ -27,6 +29,8 @@ class PostSearchRepository {
             """;
     private static final String SELECT = PostSummaryReader.SELECT + """
                 ,b.name AS board_name,
+                """ + RadioNameSql.BOARD_NAME_KO + """
+                AS board_name_ko,
                 CASE WHEN t.id IS NOT NULL AND t.is_active=FALSE THEN TRUE ELSE FALSE END AS archived
             """;
 
@@ -76,7 +80,10 @@ class PostSearchRepository {
         if (filter.period() != PostSearchFilter.Period.ALL) sql += " AND p.created_at>=:since ";
         if (filter.query() != null) sql += """
                 AND (LOWER(p.title) LIKE :query ESCAPE '!' OR LOWER(p.content) LIKE :query ESCAPE '!'
-                     OR LOWER(t.name) LIKE :query ESCAPE '!')
+                     OR LOWER(t.name) LIKE :query ESCAPE '!'
+                     OR LOWER(
+                """ + RadioNameSql.TAG_NAME_KO + """
+                     ) LIKE :query ESCAPE '!')
                 """;
         return sql;
     }
@@ -113,10 +120,10 @@ class PostSearchRepository {
     }
 
     private Row map(ResultSet rs, Long viewer, boolean includeThumbnail) throws SQLException {
-        return new Row(summaries.map(rs, viewer, includeThumbnail), rs.getString("board_name"), rs.getBoolean("archived"));
+        return new Row(summaries.map(rs, viewer, includeThumbnail), rs.getString("board_name"), rs.getString("board_name_ko"), rs.getBoolean("archived"));
     }
 
     private static LocalDateTime utc(Instant value) { return LocalDateTime.ofInstant(value, ZoneOffset.UTC); }
     private NamedParameterJdbcTemplate named() { return new NamedParameterJdbcTemplate(jdbc); }
-    record Row(PostSummaryResponse summary, String boardName, boolean archived) { }
+    record Row(PostSummaryResponse summary, String boardName, String boardNameKo, boolean archived) { }
 }

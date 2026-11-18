@@ -11,6 +11,8 @@ public interface BoardRepository extends Repository<Board, Long> {
 
     @Query(value = """
             SELECT b.id AS boardId, b.type AS type, b.name AS name,
+                   """ + RadioNameSql.BOARD_NAME_KO + """
+                   AS nameKo,
                    b.team_id AS teamId, b.display_order AS displayOrder,
                    COUNT(p.id) AS postCount
             FROM boards b
@@ -35,6 +37,7 @@ public interface BoardRepository extends Repository<Board, Long> {
         Long getBoardId();
         String getType();
         String getName();
+        String getNameKo();
         Long getTeamId();
         Integer getDisplayOrder();
         Long getPostCount();

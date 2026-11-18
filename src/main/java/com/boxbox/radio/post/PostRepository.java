@@ -1,5 +1,7 @@
 package com.boxbox.radio.post;
 
+import com.boxbox.radio.board.RadioNameSql;
+
 import com.boxbox.common.api.ApiException;
 import com.boxbox.radio.post.dto.PostDetailResponse.Author;
 import com.boxbox.radio.post.dto.PostDetailResponse.Tag;
@@ -137,8 +139,8 @@ class PostRepository {
 
     List<Tag> tags(Long tagId) {
         if (tagId == null) return List.of();
-        return jdbc.query("SELECT id,name FROM board_tags WHERE id=?",
-                (rs, row) -> new Tag(rs.getString("id"), rs.getString("name")), tagId);
+        return jdbc.query("SELECT t.id,t.name," + RadioNameSql.TAG_NAME_KO + " AS name_ko FROM board_tags t WHERE t.id=?",
+                (rs, row) -> new Tag(rs.getString("id"), rs.getString("name"), rs.getString("name_ko")), tagId);
     }
 
     long reactionCount(long postId, String type) {
