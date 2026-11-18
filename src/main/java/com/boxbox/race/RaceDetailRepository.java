@@ -25,7 +25,7 @@ class RaceDetailRepository {
             return Optional.empty();
         }
         return jdbc.sql("""
-                        SELECT id, season_year, round_number, name, country_name, circuit_name, circuit_key,
+                        SELECT id, season_year, round_number, COALESCE(NULLIF(TRIM(name_ko),''),name) AS name, name AS name_en, country_name, circuit_name, circuit_key,
                                scheduled_start_at, actual_end_at, status, updated_at
                         FROM races
                         WHERE id = :raceId
@@ -33,7 +33,7 @@ class RaceDetailRepository {
                 .param("raceId", new BigDecimal(raceId))
                 .query((row, rowNumber) -> new Race(
                         row.getString("id"), row.getInt("season_year"), row.getInt("round_number"),
-                        row.getString("name"), row.getString("country_name"), row.getString("circuit_name"),
+                        row.getString("name"), row.getString("name_en"), row.getString("country_name"), row.getString("circuit_name"),
                         row.getString("circuit_key"), instant(row, "scheduled_start_at"), instant(row, "actual_end_at"),
                         RaceStatus.valueOf(row.getString("status")),
                         instant(row, "updated_at")))
@@ -57,7 +57,7 @@ class RaceDetailRepository {
                         }
                     }
                     return new RaceDetail(race.raceId(), race.season(), race.roundNumber(),
-                            race.name(), race.countryName(), race.circuitName(), race.circuitKey(),
+                            race.name(), race.nameEn(), race.countryName(), race.circuitName(), race.circuitKey(),
                             race.scheduledStartAt(), race.actualEndAt(), race.status(),
                             sessions.stream().map(SessionRow::session).toList(), results, resultStatus, updatedAt);
                 });
@@ -65,13 +65,13 @@ class RaceDetailRepository {
 
     private List<SessionRow> findSessions(String raceId) {
         return jdbc.sql("""
-                        SELECT id, type, starts_at, ends_at, updated_at
+                        SELECT id, type, name, session_number, starts_at, ends_at, updated_at
                         FROM race_sessions
                         WHERE race_id = :raceId
                         ORDER BY starts_at, id
                         """)
                 .param("raceId", new BigDecimal(raceId))
-                .query((row, rowNumber) -> new SessionRow(new Session(row.getString("id"), row.getString("type"),
+                .query((row, rowNumber) -> new SessionRow(new Session(row.getString("id"), row.getString("type"), SessionNames.display(row.getString("type"),row.getInt("session_number"),row.getString("name")), row.getString("name"),
                         instant(row, "starts_at"), instant(row, "ends_at")), instant(row, "updated_at")))
                 .list();
     }
@@ -99,11 +99,11 @@ class RaceDetailRepository {
     enum ResultStatus { UNAVAILABLE, PROVISIONAL, FINAL }
     enum ClassificationStatus { RUNNING, FINISHED, DNF, DNS, DSQ }
 
-    private record Race(String raceId, int season, int roundNumber, String name, String countryName,
+    private record Race(String raceId, int season, int roundNumber, String name, String nameEn, String countryName,
                         String circuitName, String circuitKey, Instant scheduledStartAt, Instant actualEndAt,
                         RaceStatus status, Instant updatedAt) {}
 
-    record RaceDetail(String raceId, int season, int roundNumber, String name, String countryName,
+    record RaceDetail(String raceId, int season, int roundNumber, String name, String nameEn, String countryName,
                       String circuitName, String circuitKey, Instant scheduledStartAt, Instant actualEndAt,
                       RaceStatus status, List<Session> sessions, List<Result> results, ResultStatus resultStatus,
                       Instant updatedAt) {}
@@ -112,7 +112,7 @@ class RaceDetailRepository {
 
     private record StoredResult(Result result, boolean verifiedFinal, Instant updatedAt) {}
 
-    record Session(String sessionId, String type, Instant startsAt, Instant endsAt) {}
+    record Session(String sessionId, String type, String name, String nameEn, Instant startsAt, Instant endsAt) {}
 
     record Result(String driverId, Integer finishRank, ClassificationStatus classificationStatus,
                   BigDecimal points) {}

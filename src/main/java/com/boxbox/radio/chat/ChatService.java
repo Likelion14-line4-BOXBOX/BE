@@ -85,7 +85,7 @@ public class ChatService {
     }
 
     private static ChatResponses.Room summary(ChatRepository.Room room, Instant now, long online) {
-        return new ChatResponses.Room(Long.toString(room.id()), Long.toString(room.raceId()), room.raceName(), room.roundNumber(),
+        return new ChatResponses.Room(Long.toString(room.id()), Long.toString(room.raceId()), room.raceName(), room.raceNameEn(), room.roundNumber(),
                 ChatRoomState.at(room.storedStatus(), room.opensAt(), room.closesAt(), now).name(), online, room.opensAt(), room.closesAt(),
                 room.participantCount(), room.weekendStartsAt(), room.weekendEndsAt());
     }

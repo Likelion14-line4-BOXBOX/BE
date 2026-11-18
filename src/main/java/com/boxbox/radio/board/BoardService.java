@@ -37,9 +37,9 @@ public class BoardService {
         if (!boardRepository.existsByIdAndActiveTrue(boardId)) {
             throw new ApiException(HttpStatus.NOT_FOUND, "BOARD_NOT_FOUND", "게시판을 찾을 수 없습니다.");
         }
-        var items = boardTagRepository.findByBoardIdOrderByDisplayOrderAscIdAsc(boardId).stream()
+        var items = boardTagRepository.findSummaries(boardId).stream()
                 .map(tag -> new BoardTagResponse(tag.getId().toString(), tag.getName(),
-                        tag.getGroup(), tag.isActive(), tag.getDisplayOrder()))
+                        tag.getTagGroup(), tag.getActive(), tag.getDisplayOrder()))
                 .toList();
         return new ItemsResponse<>(items);
     }

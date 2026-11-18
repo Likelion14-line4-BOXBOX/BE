@@ -1,5 +1,7 @@
 package com.boxbox.radio.post;
 
+import com.boxbox.radio.board.RadioNameSql;
+
 import com.boxbox.common.api.ApiException;
 import com.boxbox.radio.post.dto.PostSummaryResponse;
 import java.sql.ResultSet;
@@ -26,7 +28,9 @@ class PostSearchRepository {
             LEFT JOIN board_tags t ON t.id=p.tag_id AND t.board_id=p.board_id
             """;
     private static final String SELECT = PostSummaryReader.SELECT + """
-                ,b.name AS board_name,
+                ,COALESCE(
+                """ + RadioNameSql.BOARD_NAME_KO + """
+                ,b.name) AS board_name,
                 CASE WHEN t.id IS NOT NULL AND t.is_active=FALSE THEN TRUE ELSE FALSE END AS archived
             """;
 
@@ -76,7 +80,10 @@ class PostSearchRepository {
         if (filter.period() != PostSearchFilter.Period.ALL) sql += " AND p.created_at>=:since ";
         if (filter.query() != null) sql += """
                 AND (LOWER(p.title) LIKE :query ESCAPE '!' OR LOWER(p.content) LIKE :query ESCAPE '!'
-                     OR LOWER(t.name) LIKE :query ESCAPE '!')
+                     OR LOWER(t.name) LIKE :query ESCAPE '!'
+                     OR LOWER(
+                """ + RadioNameSql.TAG_NAME_KO + """
+                     ) LIKE :query ESCAPE '!')
                 """;
         return sql;
     }

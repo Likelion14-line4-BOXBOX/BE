@@ -1,5 +1,8 @@
 package com.boxbox.home;
 
+import com.boxbox.race.SessionNames;
+import com.boxbox.radio.board.RadioNameSql;
+
 import com.boxbox.common.api.ApiException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -18,7 +21,7 @@ class HomeRepository {
 
     HomeResponse.Race nextRace(int season, Instant now) {
         return jdbc.sql("""
-                SELECT id, season_year, round_number, name, country_name, circuit_name, circuit_key, status,
+                SELECT id, season_year, round_number, COALESCE(NULLIF(TRIM(name_ko),''),name) AS name, name AS name_en, country_name, circuit_name, circuit_key, status,
                        scheduled_start_at, actual_end_at, weekend_starts_at, weekend_ends_at
                 FROM races
                 WHERE season_year = ? AND status IN ('SCHEDULED', 'LIVE')
@@ -27,7 +30,7 @@ class HomeRepository {
                 LIMIT 1
                 """).params(season, LocalDateTime.ofInstant(now, ZoneOffset.UTC))
                 .query((row, index) -> new HomeResponse.Race(row.getString("id"), row.getInt("season_year"),
-                        row.getInt("round_number"), row.getString("name"), row.getString("country_name"),
+                        row.getInt("round_number"), row.getString("name"), row.getString("name_en"), row.getString("country_name"),
                         row.getString("circuit_name"), row.getString("circuit_key"), instant(row, "scheduled_start_at"),
                         instant(row, "actual_end_at"), row.getString("status"), instant(row, "weekend_starts_at"),
                         instant(row, "weekend_ends_at"))).optional().orElse(null);
@@ -35,19 +38,21 @@ class HomeRepository {
 
     HomeResponse.Session nextSession(String raceId, Instant now) {
         return jdbc.sql("""
-                SELECT id, name, starts_at FROM race_sessions
+                SELECT id, name, type, session_number, starts_at FROM race_sessions
                 WHERE race_id = ? AND status = 'SCHEDULED' AND starts_at >= ? AND actual_starts_at IS NULL
                 ORDER BY starts_at, id LIMIT 1
                 """).params(raceId, LocalDateTime.ofInstant(now, ZoneOffset.UTC))
                 .query((row, index) -> new HomeResponse.Session(
-                        row.getString("id"), row.getString("name"), instant(row, "starts_at")))
+                        row.getString("id"), SessionNames.display(row.getString("type"),row.getInt("session_number"),row.getString("name")), row.getString("name"), instant(row, "starts_at")))
                 .optional().orElse(null);
     }
 
     List<Featured> latestPosts() {
         return jdbc.sql("""
                 SELECT id, board_name, board_type FROM (
-                    SELECT p.id, b.name AS board_name, b.type AS board_type, p.created_at,
+                    SELECT p.id, COALESCE(
+                    """ + RadioNameSql.BOARD_NAME_KO + """
+                    ,b.name) AS board_name, b.type AS board_type, p.created_at,
                            ROW_NUMBER() OVER (PARTITION BY p.board_id ORDER BY p.created_at DESC, p.id DESC) AS position
                     FROM posts p JOIN boards b ON b.id = p.board_id
                     WHERE p.deleted_at IS NULL AND b.is_active = TRUE

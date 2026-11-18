@@ -265,4 +265,32 @@ class ProfileApiTests {
     private Long numberValue(String column) {
         return jdbc.queryForObject("SELECT " + column + " FROM users WHERE id=1", Long.class);
     }
+
+    @Test void profileReadAndPatchReturnKoreanFavoritesAndExplicitNullKeys() throws Exception {
+        mvc.perform(get("/api/me").principal(() -> "viewer"))
+                .andExpect(jsonPath("$.data.favoriteTeam.name").value("팀 A"))
+                .andExpect(jsonPath("$.data.favoriteTeam.nameEn").value("팀 A"))
+                .andExpect(jsonPath("$.data.favoriteDriver.teamNameEn").value("팀 A"));
+        jdbc.update("UPDATE teams SET name='Ferrari',name_ko='페라리' WHERE id=1");
+        jdbc.update("UPDATE drivers SET name='Charles Leclerc',name_ko='샤를 르클레르' WHERE id=11");
+        mvc.perform(get("/api/me").principal(() -> "viewer"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.favoriteTeam.name").value("페라리"))
+                .andExpect(jsonPath("$.data.favoriteTeam.nameEn").value("Ferrari"))
+                .andExpect(jsonPath("$.data.favoriteDriver.name").value("샤를 르클레르"))
+                .andExpect(jsonPath("$.data.favoriteDriver.nameEn").value("Charles Leclerc"))
+                .andExpect(jsonPath("$.data.favoriteDriver.teamName").value("페라리"))
+                .andExpect(jsonPath("$.data.favoriteDriver.nameKo").doesNotExist());
+        mvc.perform(patch("/api/me").principal(() -> "viewer").contentType(MediaType.APPLICATION_JSON).content("{\"bio\":\"한국어 표시 확인\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.favoriteDriver.name").value("샤를 르클레르"))
+                .andExpect(jsonPath("$.data.favoriteDriver.teamNameEn").value("Ferrari"));
+        jdbc.update("UPDATE teams SET name_ko=NULL WHERE id=1");
+        jdbc.update("UPDATE drivers SET name_ko=' ' WHERE id=11");
+        mvc.perform(get("/api/me").principal(() -> "viewer"))
+                .andExpect(jsonPath("$.data.favoriteTeam.name").value("Ferrari"))
+                .andExpect(jsonPath("$.data.favoriteDriver.name").value("Charles Leclerc"))
+                .andExpect(jsonPath("$.data.favoriteDriver.teamName").value("Ferrari"));
+    }
+
 }

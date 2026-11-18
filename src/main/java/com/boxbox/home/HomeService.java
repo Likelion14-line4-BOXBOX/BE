@@ -63,6 +63,6 @@ class HomeService {
             rooms = chats.rooms(Map.of("status", "SCHEDULED", "size", "1", "season", seasonValue), null).items();
         }
         return rooms.stream().findFirst().map(room -> new HomeResponse.ChatRoom(room.roomId(), room.raceId(),
-                room.raceName(), room.status(), room.onlineCount(), room.opensAt(), room.closesAt())).orElse(null);
+                room.raceName(), room.raceNameEn(), room.status(), room.onlineCount(), room.opensAt(), room.closesAt())).orElse(null);
     }
 }

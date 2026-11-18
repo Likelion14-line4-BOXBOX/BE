@@ -26,8 +26,8 @@ class MarketPortfolioTest {
         jdbc.execute("CREATE TABLE users (id BIGINT, login_id VARCHAR(20), coin_balance BIGINT, status VARCHAR(16), deleted_at DATETIME)");
         jdbc.execute("CREATE TABLE positions (user_id BIGINT, stock_id BIGINT, quantity BIGINT, total_cost BIGINT)");
         jdbc.execute("CREATE TABLE market_stocks (id BIGINT, round_id BIGINT, driver_id BIGINT, team_id BIGINT, current_price BIGINT, base_rank INT)");
-        jdbc.execute("CREATE TABLE drivers (id BIGINT, name VARCHAR(100), car_number INT)");
-        jdbc.execute("CREATE TABLE teams (id BIGINT, name VARCHAR(100))");
+        jdbc.execute("CREATE TABLE drivers (id BIGINT, name VARCHAR(100), name_ko VARCHAR(120), car_number INT)");
+        jdbc.execute("CREATE TABLE teams (id BIGINT, name VARCHAR(100), name_ko VARCHAR(120))");
         jdbc.execute("CREATE TABLE trade_orders (user_id BIGINT, stock_id BIGINT, status VARCHAR(16), type VARCHAR(16), realized_pnl BIGINT)");
         jdbc.execute("CREATE TABLE coin_ledger (id BIGINT, user_id BIGINT, entry_type VARCHAR(24), created_at DATETIME, balance_after BIGINT)");
         jdbc.execute("CREATE TABLE user_settlements (id BIGINT, user_id BIGINT, round_id BIGINT, round_start_assets BIGINT, settlement_pnl BIGINT, settlement_version INT, status VARCHAR(16), published_at DATETIME(6))");
@@ -41,8 +41,8 @@ class MarketPortfolioTest {
         jdbc.update("INSERT INTO users VALUES (1, 'demo', 899995, 'ACTIVE', NULL), (2, 'other', 500, 'ACTIVE', NULL)");
         jdbc.update("INSERT INTO positions VALUES (1, 1, 2, 100005), (2, 1, 7, 250000)");
         jdbc.update("INSERT INTO market_stocks VALUES (1, 21, 3, 4, 50010, 1)");
-        jdbc.update("INSERT INTO drivers VALUES (3, 'Driver', 23)");
-        jdbc.update("INSERT INTO teams VALUES (4, 'Team')");
+        jdbc.update("INSERT INTO drivers VALUES (3, 'Driver', '선수', 23)");
+        jdbc.update("INSERT INTO teams VALUES (4, 'Team', '팀')");
         jdbc.update("INSERT INTO coin_ledger VALUES (1, 1, 'INITIAL_GRANT', '2026-11-15 00:00:00', 1000000)");
         jdbc.update("INSERT INTO ranking_snapshots (id,season_year,scope,type,published_at) VALUES (1, 2026, 'SEASON', 'TOTAL_ASSETS', '2026-11-16 00:00:00')");
         jdbc.update("INSERT INTO ranking_entries VALUES (1, 1, 12), (1, 2, 13)");
@@ -69,6 +69,8 @@ class MarketPortfolioTest {
         assertEquals(0, new BigDecimal("0.0015").compareTo(result.returnRate()));
         assertEquals(12L, result.seasonRank());
         assertEquals(1, result.positions().size());
+        assertEquals("선수", result.positions().getFirst().driver().name());
+        assertEquals("팀", result.positions().getFirst().driver().teamName());
         assertEquals(BigInteger.TWO, result.positions().getFirst().quantity());
         assertEquals(0, new BigDecimal("50002.5").compareTo(result.positions().getFirst().averageBuyPrice()));
         assertNull(result.seasonStartAssets());

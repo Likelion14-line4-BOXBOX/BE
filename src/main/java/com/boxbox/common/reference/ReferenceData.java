@@ -5,9 +5,9 @@ import java.time.Instant;
 import java.util.List;
 
 record ReferenceData(String referenceVersion, int season, List<Team> teams, List<Driver> drivers) {
-    record Team(String teamId, String code, String name, String description, int displayOrder,
+    record Team(String teamId, String code, String name, String nameEn, String description, int displayOrder,
                 Integer championshipRank, BigDecimal championshipPoints, Instant statsAsOf) {}
 
-    record Driver(String driverId, String code, String name, int number, String teamId, String description,
+    record Driver(String driverId, String code, String name, String nameEn, int number, String teamId, String description,
                   Integer championshipRank, BigDecimal championshipPoints, Instant statsAsOf) {}
 }

@@ -56,7 +56,7 @@ class ChatReadApiTests {
     void publicRoomListHasContractAndUsesConfiguredSeasonAndDatabaseWindows() throws Exception {
         mvc.perform(get("/api/chat-rooms"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.items[*].roomId").value(is(List.of("4", "2", "6", "1", "7", "3"))))
-                .andExpect(jsonPath("$.data.items[0].length()").value(11))
+                .andExpect(jsonPath("$.data.items[0].length()").value(12))
                 .andExpect(jsonPath("$.data.items[0].status").value("ARCHIVED"))
                 .andExpect(jsonPath("$.data.items[1].status").value("SCHEDULED"))
                 .andExpect(jsonPath("$.data.items[3].status").value("LIVE"))
@@ -90,7 +90,7 @@ class ChatReadApiTests {
     @CsvSource({"1,true", "2,false", "3,false", "4,false"})
     void detailCanSendReflectsMemberAndCurrentRoomState(String roomId, boolean expected) throws Exception {
         mvc.perform(get("/api/chat-rooms/" + roomId).principal(() -> "viewer"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.data.length()").value(12))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.length()").value(13))
                 .andExpect(jsonPath("$.data.canSendMessage").value(expected));
         mvc.perform(get("/api/chat-rooms/" + roomId)).andExpect(jsonPath("$.data.canSendMessage").value(false));
     }
@@ -164,6 +164,17 @@ class ChatReadApiTests {
         var after = service.history(1, Map.of(), null).data().timelineMarkers();
         assertThat(after.stream().map(row -> row.markerId())).containsExactlyElementsOf(before.stream().map(row -> row.markerId()).toList());
         assertThat(after.stream().filter(row -> row.markerId().equals("session_1_start")).findFirst().orElseThrow().label()).isEqualTo("실제 전환");
+    }
+
+    @Test
+    void storedAutomaticSessionLabelsAreLocalizedWithoutChangingCustomLabelsOrPayloads() {
+        jdbc.update("UPDATE race_sessions SET type='PRACTICE',session_number=1,name='Practice 1' WHERE id=1");
+        jdbc.update("UPDATE stream_events SET payload='{" + "\"markerId\":\"automatic\",\"sessionId\":\"1\",\"label\":\"Practice 1\"}' WHERE id=1");
+        var before = jdbc.queryForObject("SELECT payload FROM stream_events WHERE id=1", String.class);
+        var markers = service.history(1, Map.of(), null).data().timelineMarkers();
+        assertThat(markers.stream().filter(row -> row.markerId().equals("session_1_start")).findFirst().orElseThrow().label())
+                .isEqualTo("프리 프랙티스 1");
+        assertThat(jdbc.queryForObject("SELECT payload FROM stream_events WHERE id=1", String.class)).isEqualTo(before);
     }
 
     @Test
@@ -360,4 +371,22 @@ class ChatReadApiTests {
                 jdbc.queryForList("SELECT id,room_id,stream_sequence,event_type,occurred_at,expires_at FROM stream_events ORDER BY id"),
                 jdbc.queryForList("SELECT payload FROM stream_events ORDER BY id", String.class));
     }
+
+    @Test void roomDetailAndFilteredListShareKoreanRaceNameAndExplicitNull() throws Exception {
+        String original = jdbc.queryForObject("SELECT name FROM races WHERE id=1",String.class);
+        mvc.perform(get("/api/chat-rooms/1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.raceName").value(original))
+                .andExpect(jsonPath("$.data.raceNameEn").value(original))
+                .andExpect(jsonPath("$.data.raceNameKo").doesNotExist());
+        jdbc.update("UPDATE races SET name='Las Vegas Grand Prix',name_ko='라스베이거스 그랑프리' WHERE id=1");
+        mvc.perform(get("/api/chat-rooms/1"))
+                .andExpect(jsonPath("$.data.raceName").value("라스베이거스 그랑프리"))
+                .andExpect(jsonPath("$.data.raceNameEn").value("Las Vegas Grand Prix"));
+        var page = service.rooms(Map.of("season", "2026", "size", "100"), null);
+        assertThat(page.items().stream().filter(room -> room.raceId().equals("1")).findFirst().orElseThrow().raceName())
+                .isEqualTo("라스베이거스 그랑프리");
+        assertThat(page.items().stream().filter(room -> !room.raceId().equals("1")).allMatch(room -> room.raceName().equals(room.raceNameEn()))).isTrue();
+    }
+
 }

@@ -17,7 +17,7 @@ import org.springframework.stereotype.Repository;
 @RequiredArgsConstructor
 public class MarketRoundRepository {
     private static final String ROUND_COLUMNS = """
-                m.id, m.race_id, m.season_year, r.round_number, r.name AS race_name,
+                m.id, m.race_id, m.season_year, r.round_number, COALESCE(NULLIF(TRIM(r.name_ko),''),r.name) AS race_name,
                 m.status, m.open_at, m.close_at, m.publish_at, m.ranking_published_at,
                 m.rule_version, m.status_version, c.id AS chat_room_id
             """;
