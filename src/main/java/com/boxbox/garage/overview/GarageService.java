@@ -25,13 +25,12 @@ public class GarageService {
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public GarageResponse get(String loginId, String userId, Map<String, String> params) {
-        if (loginId == null || loginId.isBlank()) throw ApiException.unauthorized();
-        long viewerId = viewers.viewerId(loginId).orElseThrow(ApiException::unauthorized);
+        Long viewerId = loginId == null ? null : viewers.viewerId(loginId).orElseThrow(ApiException::unauthorized);
         long targetId = BoardFilter.parseId(userId, "userId");
         if (!params.isEmpty()) throw ApiException.invalidRequest("개러지 조회에는 조회 조건을 지정하지 않습니다.");
         var profile = profiles.findGarageProfile(targetId).orElseThrow(() ->
                 new ApiException(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "유저를 찾을 수 없습니다."));
-        boolean owner = viewerId == targetId;
+        boolean owner = viewerId != null && viewerId == targetId;
         // 비공개 타인 조회에서는 원본 제공자의 존재나 준비 상태도 확인하지 않는다.
         GarageMarketSummary summary = owner || profile.showMarketAssets() ? marketSummary(targetId) : null;
         var board = stamps.list(loginId, Long.toString(targetId), Map.of());
