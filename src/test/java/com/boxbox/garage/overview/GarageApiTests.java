@@ -185,13 +185,15 @@ class GarageApiTests {
     }
 
     @Test void publicGarageReusesKoreanFavoritesWithoutExposingPrivateSettings() throws Exception {
-        jdbc.update("UPDATE teams SET name_ko='페라리' WHERE id=1");
-        jdbc.update("UPDATE drivers SET name_ko='샤를 르클레르' WHERE id=11");
+        jdbc.update("UPDATE teams SET name='Ferrari',name_ko='페라리' WHERE id=1");
+        jdbc.update("UPDATE drivers SET name='Charles Leclerc',name_ko='샤를 르클레르' WHERE id=11");
         mvc.perform(get("/api/users/1/garage").principal(() -> "other"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.profile.favoriteTeam.nameKo").value("페라리"))
-                .andExpect(jsonPath("$.data.profile.favoriteDriver.nameKo").value("샤를 르클레르"))
-                .andExpect(jsonPath("$.data.profile.favoriteDriver.teamNameKo").value("페라리"))
+                .andExpect(jsonPath("$.data.profile.favoriteTeam.name").value("페라리"))
+                .andExpect(jsonPath("$.data.profile.favoriteTeam.nameEn").value("Ferrari"))
+                .andExpect(jsonPath("$.data.profile.favoriteDriver.name").value("샤를 르클레르"))
+                .andExpect(jsonPath("$.data.profile.favoriteDriver.nameEn").value("Charles Leclerc"))
+                .andExpect(jsonPath("$.data.profile.favoriteDriver.teamName").value("페라리"))
                 .andExpect(jsonPath("$.data.profile.showMarketAssets").doesNotExist());
     }
 

@@ -167,6 +167,17 @@ class ChatReadApiTests {
     }
 
     @Test
+    void storedAutomaticSessionLabelsAreLocalizedWithoutChangingCustomLabelsOrPayloads() {
+        jdbc.update("UPDATE race_sessions SET type='PRACTICE',session_number=1,name='Practice 1' WHERE id=1");
+        jdbc.update("UPDATE stream_events SET payload='{" + "\"markerId\":\"automatic\",\"sessionId\":\"1\",\"label\":\"Practice 1\"}' WHERE id=1");
+        var before = jdbc.queryForObject("SELECT payload FROM stream_events WHERE id=1", String.class);
+        var markers = service.history(1, Map.of(), null).data().timelineMarkers();
+        assertThat(markers.stream().filter(row -> row.markerId().equals("session_1_start")).findFirst().orElseThrow().label())
+                .isEqualTo("프리 프랙티스 1");
+        assertThat(jdbc.queryForObject("SELECT payload FROM stream_events WHERE id=1", String.class)).isEqualTo(before);
+    }
+
+    @Test
     void emptyHistoryReturnsEmptyMarkersAndZeroEventCursor() throws Exception {
         mvc.perform(get("/api/chat-rooms/6/messages")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items").isEmpty()).andExpect(jsonPath("$.data.timelineMarkers").isEmpty())
@@ -362,16 +373,20 @@ class ChatReadApiTests {
     }
 
     @Test void roomDetailAndFilteredListShareKoreanRaceNameAndExplicitNull() throws Exception {
+        String original = jdbc.queryForObject("SELECT name FROM races WHERE id=1",String.class);
         mvc.perform(get("/api/chat-rooms/1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data").value(org.hamcrest.Matchers.hasEntry("raceNameKo", null)));
-        jdbc.update("UPDATE races SET name_ko='라스베이거스 그랑프리' WHERE id=1");
+                .andExpect(jsonPath("$.data.raceName").value(original))
+                .andExpect(jsonPath("$.data.raceNameEn").value(original))
+                .andExpect(jsonPath("$.data.raceNameKo").doesNotExist());
+        jdbc.update("UPDATE races SET name='Las Vegas Grand Prix',name_ko='라스베이거스 그랑프리' WHERE id=1");
         mvc.perform(get("/api/chat-rooms/1"))
-                .andExpect(jsonPath("$.data.raceNameKo").value("라스베이거스 그랑프리"));
+                .andExpect(jsonPath("$.data.raceName").value("라스베이거스 그랑프리"))
+                .andExpect(jsonPath("$.data.raceNameEn").value("Las Vegas Grand Prix"));
         var page = service.rooms(Map.of("season", "2026", "size", "100"), null);
-        assertThat(page.items().stream().filter(room -> room.raceId().equals("1")).findFirst().orElseThrow().raceNameKo())
+        assertThat(page.items().stream().filter(room -> room.raceId().equals("1")).findFirst().orElseThrow().raceName())
                 .isEqualTo("라스베이거스 그랑프리");
-        assertThat(page.items().stream().filter(room -> !room.raceId().equals("1")).allMatch(room -> room.raceNameKo() == null)).isTrue();
+        assertThat(page.items().stream().filter(room -> !room.raceId().equals("1")).allMatch(room -> room.raceName().equals(room.raceNameEn()))).isTrue();
     }
 
 }

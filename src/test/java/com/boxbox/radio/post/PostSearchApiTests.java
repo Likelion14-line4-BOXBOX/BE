@@ -327,12 +327,17 @@ class PostSearchApiTests {
         jdbc.update("UPDATE board_tags SET name='Original tag',tag_group='TEAM' WHERE id=100");
         mvc.perform(get("/api/posts/1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.tags[0].name").value("Original tag"))
-                .andExpect(jsonPath("$.data.tags[0].nameKo").value("페라리"));
+                .andExpect(jsonPath("$.data.tags[0].name").value("페라리"))
+                .andExpect(jsonPath("$.data.tags[0].nameKo").doesNotExist());
         mvc.perform(get("/api/posts?q=페라리"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.items[0].tags[0].nameKo").value("페라리"))
-                .andExpect(jsonPath("$.data.items[0].boardNameKo").value("페라리 게시판"));
+                .andExpect(jsonPath("$.data.items[0].tags[0].name").value("페라리"))
+                .andExpect(jsonPath("$.data.items[0].boardName").value("페라리 게시판"))
+                .andExpect(jsonPath("$.data.items[0].boardNameKo").doesNotExist());
+        mvc.perform(get("/api/posts?q=Original"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.items[0].tags[0].name").value("페라리"));
+        mvc.perform(get("/api/boards/10/posts?tagId=100"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.items[0].tags[0].name").value("페라리"));
         assertThat(jdbc.queryForObject("SELECT name FROM board_tags WHERE id=100",String.class)).isEqualTo("Original tag");
     }
 

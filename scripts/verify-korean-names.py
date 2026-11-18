@@ -133,6 +133,7 @@ def request(path, expected=200, token=None, method='GET', body=None):
 env = dict(os.environ, DB_URL=f'jdbc:mysql://127.0.0.1:13306/{fresh}?connectionTimeZone=UTC&characterEncoding=UTF-8', DB_USERNAME='root', DB_PASSWORD='',
            AUTH_JWT_SECRET=base64.b64encode(secrets.token_bytes(48)).decode(), AUTH_EXTENDED_ACCESS_USER_IDS='',
            MARKET_PREPARATION_ENABLED='false', MARKET_SETTLEMENT_ENABLED='false')
+env['SPRING_APPLICATION_JSON'] = json.dumps({'spring.datasource.url': env['DB_URL'], 'spring.datasource.username': 'root', 'spring.datasource.password': '', 'boxbox.auth.jwt-secret': env['AUTH_JWT_SECRET'], 'boxbox.auth.extended-access-user-ids': '', 'boxbox.market.preparation.enabled': False, 'boxbox.market.settlement.enabled': False, 'boxbox.race.session-sync.enabled': False})
 logs = BE/'build/verification'
 with (logs/'issue-61-server.log').open('w',encoding='utf-8') as out, (logs/'issue-61-server-error.log').open('w',encoding='utf-8') as err:
     server = subprocess.Popen(['C:/Program Files/Java/jdk-21/bin/java.exe','-jar',str(BE/'build/libs/boxbox-0.0.1-SNAPSHOT.jar'),
@@ -151,42 +152,75 @@ with (logs/'issue-61-server.log').open('w',encoding='utf-8') as out, (logs/'issu
             users.append(signup['data']['userId'])
             tokens.append(request('/api/auth/login',method='POST',body=dict(loginId=login,password='verify1234'))['data']['accessToken'])
         token, peer = tokens; user = users[0]
+        # The expanded scope uses the same real server and isolated reference IDs.
+        sql(f"UPDATE races SET status='FINISHED'; UPDATE races SET status='SCHEDULED',weekend_starts_at=UTC_TIMESTAMP()+INTERVAL 1 HOUR,weekend_ends_at=UTC_TIMESTAMP()+INTERVAL 3 DAY WHERE id={race}", fresh)
+        sql(f"INSERT INTO race_sessions(race_id,type,session_number,name,starts_at) VALUES({race},'PRACTICE',1,'Practice 1',UTC_TIMESTAMP()+INTERVAL 1 HOUR),({race},'RACE',1,'Race',UTC_TIMESTAMP()+INTERVAL 2 DAY)",fresh)
+        sql(f"INSERT INTO market_rounds(id,race_id,season_year,status,open_at,close_at,publish_at,rule_version,rule_snapshot) VALUES(61,{race},2026,'OPEN',UTC_TIMESTAMP()-INTERVAL 1 DAY,UTC_TIMESTAMP()+INTERVAL 2 DAY,UTC_TIMESTAMP()+INTERVAL 3 DAY,'verify-61','{{}}'); INSERT INTO market_stocks(id,round_id,season_year,driver_id,team_id,base_rank,starting_price,current_price,theoretical_price) VALUES(61,61,2026,{driver},{team},1,50000,60000,60000); INSERT INTO positions(user_id,stock_id,quantity,total_cost) VALUES({user},61,2,100000)",fresh)
+        ref=request('/api/reference-data')['data']
+        check('reference teams and drivers use Korean with original names',next(t for t in ref['teams'] if t['teamId']==team)['name']=='페라리' and next(d for d in ref['drivers'] if d['driverId']==driver)['nameEn']=='Charles Leclerc')
+        races=request('/api/races?season=2026&size=100')['data']['items']
+        check('race schedule uses Korean and preserves English',next(r for r in races if r['raceId']==race)['name']=='라스베이거스 그랑프리' and next(r for r in races if r['raceId']==race)['nameEn']=='Las Vegas Grand Prix')
+        detail=request(f'/api/races/{race}')['data']
+        check('race detail and typed session names localized',detail['name']=='라스베이거스 그랑프리' and detail['sessions'][0]['name']=='프리 프랙티스 1' and detail['sessions'][0]['nameEn']=='Practice 1' and detail['sessions'][1]['name']=='본선')
+        home=request('/api/home')['data']
+        check('home reuses localized race session room and market names',home['nextRace']['name']=='라스베이거스 그랑프리' and home['nextSession']['name']=='프리 프랙티스 1' and home['liveChatRoom']['raceName']=='라스베이거스 그랑프리' and home['marketRound']['raceName']=='라스베이거스 그랑프리')
+        current=request('/api/market/rounds/current')['data']['round']
+        check('current market round uses Korean race name',current['roundId']=='61' and current['raceName']=='라스베이거스 그랑프리')
+        check('market detail uses Korean race name',request('/api/market/rounds/61')['data']['raceName']=='라스베이거스 그랑프리')
+        stock=request(f'/api/market/rounds/61/stocks?teamId={team}')['data']['items'][0]
+        check('stock list keeps IDs prices and localized driver team',stock['driver']['driverId']==driver and stock['driver']['name']=='샤를 르클레르' and stock['driver']['teamName']=='페라리' and stock['currentPrice']==60000)
+        stock_detail=request(f'/api/market/rounds/61/stocks/{driver}')['data']
+        check('stock detail shares localized driver',stock_detail['driver']['name']=='샤를 르클레르')
+        portfolio=request('/api/me/portfolio?roundId=61',token=token)['data']
+        check('portfolio localizes positions without changing valuation',portfolio['positions'][0]['driver']['name']=='샤를 르클레르' and portfolio['positions'][0]['driver']['teamName']=='페라리' and portfolio['positions'][0]['valuation']==120000)
+        sql(f"INSERT INTO user_settlements(round_id,user_id,round_start_assets,ending_assets,round_pnl,settlement_proceeds,settlement_pnl,return_rate,status,joined_at,completed_at,published_at,rule_snapshot) VALUES(61,{user},1000000,1020000,20000,120000,20000,2,'COMPLETED',UTC_TIMESTAMP()-INTERVAL 1 DAY,UTC_TIMESTAMP()-INTERVAL 1 HOUR,UTC_TIMESTAMP()-INTERVAL 1 HOUR,'{{}}')",fresh)
+        settlements=request('/api/me/settlements?season=2026',token=token)['data']['items']
+        check('settlement list Korean name and stored amounts preserved',settlements[0]['raceName']=='라스베이거스 그랑프리' and settlements[0]['roundPnl']==20000)
+        check('published settlement detail remains accessible',request('/api/me/settlements/61',token=token)['data']['endingAssets']==1020000)
+        request('/api/races/999999',404)
+        check('empty race filter returns empty list',request('/api/races?season=2099')['data']['items']==[])
         request('/api/me',401)
         profile = request('/api/me',token=token,method='PATCH',body=dict(favoriteTeamId=team,favoriteDriverId=driver))['data']
-        check('profile PATCH Korean favorite names', profile['favoriteTeam']['nameKo']=='페라리' and profile['favoriteDriver']['nameKo']=='샤를 르클레르' and profile['favoriteDriver']['teamNameKo']=='페라리')
+        check('profile PATCH Korean favorite names', profile['favoriteTeam']['name']=='페라리' and profile['favoriteDriver']['name']=='샤를 르클레르' and profile['favoriteDriver']['teamName']=='페라리')
         profile = request('/api/me',token=token)['data']
-        check('English favorites and IDs preserved', profile['favoriteTeam']['name']=='Ferrari' and profile['favoriteDriver']['name']=='Charles Leclerc' and profile['favoriteTeam']['teamId']==team and profile['favoriteDriver']['driverId']==driver)
+        check('English favorites and IDs preserved', profile['favoriteTeam']['nameEn']=='Ferrari' and profile['favoriteDriver']['nameEn']=='Charles Leclerc' and profile['favoriteTeam']['teamId']==team and profile['favoriteDriver']['driverId']==driver)
         garage = request(f'/api/users/{user}/garage',token=peer)['data']
-        check('public garage shares localized profile and privacy policy', garage['profile']['favoriteDriver']['nameKo']=='샤를 르클레르' and 'showMarketAssets' not in garage['profile'] and garage['marketSummary'] is None)
+        check('public garage shares localized profile and privacy policy', garage['profile']['favoriteDriver']['name']=='샤를 르클레르' and garage['profile']['favoriteDriver']['nameEn']=='Charles Leclerc' and 'showMarketAssets' not in garage['profile'] and garage['marketSummary'] is None)
         board_data = request(f'/api/boards?teamId={team}')['data']['items'][0]
-        check('board name is derived without rewriting English', board_data['boardId']==board and board_data['name']=='Ferrari 게시판' and board_data['nameKo']=='페라리 게시판')
+        check('board name is derived without rewriting English', board_data['boardId']==board and board_data['name']=='페라리 게시판' and 'nameKo' not in board_data)
         tags = request(f'/api/boards/{board}/tags')['data']['items']
-        check('team and driver tags share reference translations', any(t['nameKo']=='페라리' for t in tags) and next(t for t in tags if t['tagId']==driver_tag)['nameKo']=='샤를 르클레르')
+        check('team and driver tags share reference translations', any(t['name']=='페라리' for t in tags) and next(t for t in tags if t['tagId']==driver_tag)['name']=='샤를 르클레르')
         free_board = sql("SELECT id FROM boards WHERE code='FREE'", fresh)
-        check('topic tag has explicit null Korean key', all('nameKo' in t and t['nameKo'] is None for t in request(f'/api/boards/{free_board}/tags')['data']['items']))
+        check('topic tags keep their original display field', all('name' in t and 'nameKo' not in t for t in request(f'/api/boards/{free_board}/tags')['data']['items']))
         post = request(f'/api/boards/{board}/posts',201,token=token,method='POST',body=dict(title='한글 이름 확인',content='태그 표시 검증',tagIds=[driver_tag]))['data']['postId']
         for path in [f'/api/posts/{post}',f'/api/boards/{board}/posts','/api/me/posts?filter=AUTHORED']:
             data=request(path,token=token)['data']
             item=data if 'tags' in data else data['items'][0]
-            check(path+' localized tag',item['tags'][0]['nameKo']=='샤를 르클레르' and item['tags'][0]['tagId']==driver_tag)
+            check(path+' localized tag',item['tags'][0]['name']=='샤를 르클레르' and 'nameKo' not in item['tags'][0] and item['tags'][0]['tagId']==driver_tag)
         from urllib.parse import quote
         found=request('/api/posts?q='+quote('르클레르'))['data']
-        check('Korean tag is searchable and search includes Korean board name',found['totalCount']==1 and found['items'][0]['boardNameKo']=='페라리 게시판')
+        check('Korean tag is searchable and search includes Korean board name',found['totalCount']==1 and found['items'][0]['boardName']=='페라리 게시판' and 'boardNameKo' not in found['items'][0])
+        featured=request('/api/home')['data']['featuredPosts'][0]
+        check('home featured board and tags localized',featured['boardName']=='페라리 게시판' and featured['tags'][0]['name']=='샤를 르클레르')
         check('empty search stays an empty list',request('/api/posts?q=unknown-61-empty')['data']['items']==[])
         null_race = request(f'/api/chat-rooms/{null_room}')['data']
-        check('untranslated room has explicit null key', 'raceNameKo' in null_race and null_race['raceNameKo'] is None)
+        check('untranslated room falls back to original English name',null_race['raceName']=='Qatar Grand Prix' and null_race['raceNameEn']=='Qatar Grand Prix' and 'raceNameKo' not in null_race)
         live=request(f'/api/chat-rooms/{room}')['data']
-        check('room has localized and original race name',live['raceNameKo']=='라스베이거스 그랑프리' and live['raceName']=='Las Vegas Grand Prix')
+        check('room has localized and original race name',live['raceName']=='라스베이거스 그랑프리' and live['raceNameEn']=='Las Vegas Grand Prix')
         rooms=request('/api/chat-rooms?season=2026&status=LIVE')['data']['items']
-        check('filtered rooms retain Korean names',len(rooms)==1 and rooms[0]['raceNameKo']==live['raceNameKo'])
+        check('filtered rooms retain Korean names',len(rooms)==1 and rooms[0]['raceName']==live['raceName'] and rooms[0]['raceNameEn']==live['raceNameEn'])
         check('empty season stays empty',request('/api/chat-rooms?season=2099')['data']['items']==[])
         stamps=request(f'/api/users/{user}/race-stamps?season=2026',token=token)['data']
-        check('stamps carry Korean names even without participation',len(stamps['items'])==23 and stamps['watchedCount']==0 and next(s for s in stamps['items'] if s['raceId']==race)['raceNameKo']==live['raceNameKo'])
-        check('untranslated stamp has explicit null key',next(s for s in stamps['items'] if s['raceId']==untranslated_race)['raceNameKo'] is None)
+        check('stamps carry Korean names even without participation',len(stamps['items'])==23 and stamps['watchedCount']==0 and next(s for s in stamps['items'] if s['raceId']==race)['raceName']==live['raceName'])
+        check('untranslated stamp falls back to original name',next(s for s in stamps['items'] if s['raceId']==untranslated_race)['raceName']=='Qatar Grand Prix')
         sql(f'UPDATE teams SET name_ko=NULL WHERE id={team}',fresh)
         null_profile=request('/api/me',token=token)['data']
-        check('untranslated favorite and team fallback keys',null_profile['favoriteTeam']['nameKo'] is None and null_profile['favoriteDriver']['teamNameKo'] is None and null_profile['favoriteTeam']['name']=='Ferrari')
-        check('untranslated board stays null',request(f'/api/boards?teamId={team}')['data']['items'][0]['nameKo'] is None)
+        check('untranslated favorite and team keep non-null original names',null_profile['favoriteTeam']['name']=='Ferrari' and null_profile['favoriteDriver']['teamName']=='Ferrari' and null_profile['favoriteTeam']['nameEn']=='Ferrari')
+        check('untranslated board uses its original stored name',request(f'/api/boards?teamId={team}')['data']['items'][0]['name']=='Ferrari 게시판')
+        sql(f"UPDATE drivers SET name_ko=' ' WHERE id={driver}",fresh)
+        ref=request('/api/reference-data')['data']
+        check('reference null and blank translations fall back to original',next(t for t in ref['teams'] if t['teamId']==team)['name']=='Ferrari' and next(d for d in ref['drivers'] if d['driverId']==driver)['name']=='Charles Leclerc')
+        check('stock detail uses original names after translation removed',request(f'/api/market/rounds/61/stocks/{driver}')['data']['driver']['name']=='Charles Leclerc')
         request('/api/chat-rooms?status=BAD',400)
         request('/api/chat-rooms/999999',404)
         request('/api/boards/999999/tags',404)

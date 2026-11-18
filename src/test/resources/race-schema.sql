@@ -2,7 +2,7 @@ CREATE TABLE IF NOT EXISTS races (
     id BIGINT PRIMARY KEY,
     season_year SMALLINT NOT NULL,
     round_number SMALLINT NOT NULL,
-    name VARCHAR(120) NOT NULL,
+    name VARCHAR(120) NOT NULL, name_ko VARCHAR(120),
     country_name VARCHAR(80) NOT NULL,
     circuit_name VARCHAR(120) NOT NULL,
     circuit_key VARCHAR(80) NOT NULL,
@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS race_sessions (
     id BIGINT PRIMARY KEY,
     race_id BIGINT NOT NULL REFERENCES races (id),
     type VARCHAR(24) NOT NULL,
-    name VARCHAR(100) NOT NULL,
+    name VARCHAR(100) NOT NULL, session_number INT NOT NULL DEFAULT 1,
     starts_at TIMESTAMP NOT NULL,
     ends_at TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP

@@ -23,7 +23,7 @@ class MarketSettlementTest {
                 + ";MODE=MySQL;DB_CLOSE_DELAY=-1"));
         jdbc.execute("CREATE TABLE users (id BIGINT, login_id VARCHAR(20), status VARCHAR(16), deleted_at DATETIME)");
         jdbc.execute("CREATE TABLE market_rounds (id BIGINT, race_id BIGINT, season_year INT)");
-        jdbc.execute("CREATE TABLE races (id BIGINT, season_year INT, name VARCHAR(100), round_number INT)");
+        jdbc.execute("CREATE TABLE races (id BIGINT, season_year INT, name VARCHAR(100), name_ko VARCHAR(120), round_number INT)");
         jdbc.execute("""
                 CREATE TABLE user_settlements (id BIGINT, user_id BIGINT, round_id BIGINT, settlement_version INT,
                     status VARCHAR(16), round_start_assets BIGINT, ending_assets BIGINT, round_pnl BIGINT,
@@ -31,7 +31,7 @@ class MarketSettlementTest {
                 """);
         jdbc.update("INSERT INTO users VALUES (1, 'demo', 'ACTIVE', NULL), (2, 'other', 'ACTIVE', NULL)");
         jdbc.update("INSERT INTO market_rounds VALUES (21, 1, 2026), (22, 2, 2026), (99, 3, 2025)");
-        jdbc.update("INSERT INTO races VALUES (1, 2026, 'Race A', 1), (2, 2026, 'Race B', 2), (3, 2025, 'Race C', 3)");
+        jdbc.update("INSERT INTO races VALUES (1, 2026, 'Race A', '경기 A', 1), (2, 2026, 'Race B', NULL, 2), (3, 2025, 'Race C', ' ', 3)");
         jdbc.update("""
                 INSERT INTO user_settlements VALUES
                     (1, 1, 22, 1, 'PUBLISHED', 100, 106, 6, 6, 12, 20, '2026-11-14 00:00:00'),
@@ -48,6 +48,7 @@ class MarketSettlementTest {
         assertTrue(first.hasNext());
         var pending = first.items().getFirst();
         assertEquals("22", pending.roundId());
+        assertEquals("Race B", pending.raceName());
         assertEquals("PROCESSING", pending.status());
         assertNull(pending.endingAssets());
         assertNull(pending.roundPnl());
@@ -61,6 +62,7 @@ class MarketSettlementTest {
         assertNull(second.nextCursor());
         var published = second.items().getFirst();
         assertEquals("21", published.roundId());
+        assertEquals("경기 A", published.raceName());
         assertEquals("PUBLISHED", published.status());
         assertEquals(BigInteger.valueOf(4), published.roundPnl());
         assertEquals(BigInteger.valueOf(18), published.settlementProceeds());
@@ -78,14 +80,14 @@ class MarketSettlementTest {
                 {"ruleVersion":"frozen-rule","driverNames":{"1":"Driver at settlement"}}
                 """);
         jdbc.execute("CREATE TABLE market_stocks (id BIGINT, round_id BIGINT, driver_id BIGINT)");
-        jdbc.execute("CREATE TABLE drivers (id BIGINT, name VARCHAR(100))");
+        jdbc.execute("CREATE TABLE drivers (id BIGINT, name VARCHAR(100), name_ko VARCHAR(120))");
         jdbc.execute("""
                 CREATE TABLE user_settlement_items (user_settlement_id BIGINT, user_id BIGINT, round_id BIGINT,
                     settlement_version INT, stock_id BIGINT, base_rank INT, finish_rank INT, position_score INT,
                     result_bonus INT, final_score INT, starting_price BIGINT, settlement_price BIGINT,
                     quantity BIGINT, total_cost BIGINT, proceeds BIGINT, pnl BIGINT)
                 """);
-        jdbc.update("INSERT INTO drivers VALUES (1, 'Driver A')");
+        jdbc.update("INSERT INTO drivers(id,name) VALUES (1, 'Driver A')");
         jdbc.update("INSERT INTO market_stocks VALUES (1, 21, 1)");
         jdbc.update("""
                 INSERT INTO user_settlement_items VALUES
@@ -102,6 +104,11 @@ class MarketSettlementTest {
         var item = detail.items().getFirst();
         assertEquals("Driver at settlement", item.driverName());
         jdbc.update("UPDATE drivers SET name = 'Renamed Driver' WHERE id = 1");
+        assertEquals("Driver at settlement", service.detail("demo", "21", now).items().getFirst().driverName());
+        jdbc.update("UPDATE drivers SET name_ko = '선수 A' WHERE id = 1");
+        assertEquals("선수 A", service.detail("demo", "21", now).items().getFirst().driverName());
+        assertEquals("Renamed Driver", jdbc.queryForObject("SELECT name FROM drivers WHERE id = 1", String.class));
+        jdbc.update("UPDATE drivers SET name_ko = ' ' WHERE id = 1");
         assertEquals("Driver at settlement", service.detail("demo", "21", now).items().getFirst().driverName());
         jdbc.update("UPDATE user_settlements SET rule_snapshot = NULL WHERE id = 3");
         assertEquals("Renamed Driver", service.detail("demo", "21", now).items().getFirst().driverName());

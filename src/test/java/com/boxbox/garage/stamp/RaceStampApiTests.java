@@ -125,13 +125,17 @@ class RaceStampApiTests {
 
     @Test void stampsIncludeKoreanNamesForRacesWithOrWithoutRoomsAndDoNotChangeParticipation() throws Exception {
         var before = jdbc.queryForList("SELECT * FROM chat_participants ORDER BY room_id,user_id");
-        jdbc.update("UPDATE races SET name_ko='라스베이거스 그랑프리' WHERE id=1");
-        jdbc.update("UPDATE races SET name_ko='아부다비 그랑프리' WHERE id=8");
+        jdbc.update("UPDATE races SET name='Las Vegas Grand Prix',name_ko='라스베이거스 그랑프리' WHERE id=1");
+        jdbc.update("UPDATE races SET name='Abu Dhabi Grand Prix',name_ko='아부다비 그랑프리' WHERE id=8");
+        String second = jdbc.queryForObject("SELECT name FROM races WHERE id=2",String.class);
         mvc.perform(get("/api/users/1/race-stamps?season=2026").principal(() -> "viewer"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.items[0].raceNameKo").value("라스베이거스 그랑프리"))
-                .andExpect(jsonPath("$.data.items[1]").value(org.hamcrest.Matchers.hasEntry("raceNameKo", null)))
-                .andExpect(jsonPath("$.data.items[6].raceNameKo").value("아부다비 그랑프리"));
+                .andExpect(jsonPath("$.data.items[0].raceName").value("라스베이거스 그랑프리"))
+                .andExpect(jsonPath("$.data.items[0].raceNameEn").value("Las Vegas Grand Prix"))
+                .andExpect(jsonPath("$.data.items[1].raceName").value(second))
+                .andExpect(jsonPath("$.data.items[1].raceNameEn").value(second))
+                .andExpect(jsonPath("$.data.items[6].raceName").value("아부다비 그랑프리"))
+                .andExpect(jsonPath("$.data.items[6].raceNameEn").value("Abu Dhabi Grand Prix"));
         assertThat(jdbc.queryForList("SELECT * FROM chat_participants ORDER BY room_id,user_id")).isEqualTo(before);
     }
 
