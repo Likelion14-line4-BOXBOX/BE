@@ -265,4 +265,23 @@ class ProfileApiTests {
     private Long numberValue(String column) {
         return jdbc.queryForObject("SELECT " + column + " FROM users WHERE id=1", Long.class);
     }
+
+    @Test void profileReadAndPatchReturnKoreanFavoritesAndExplicitNullKeys() throws Exception {
+        mvc.perform(get("/api/me").principal(() -> "viewer"))
+                .andExpect(jsonPath("$.data.favoriteTeam").value(org.hamcrest.Matchers.hasEntry("nameKo", null)))
+                .andExpect(jsonPath("$.data.favoriteDriver").value(org.hamcrest.Matchers.hasEntry("teamNameKo", null)));
+        jdbc.update("UPDATE teams SET name_ko='페라리' WHERE id=1");
+        jdbc.update("UPDATE drivers SET name_ko='샤를 르클레르' WHERE id=11");
+        mvc.perform(get("/api/me").principal(() -> "viewer"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.favoriteTeam.name").value("팀 A"))
+                .andExpect(jsonPath("$.data.favoriteTeam.nameKo").value("페라리"))
+                .andExpect(jsonPath("$.data.favoriteDriver.nameKo").value("샤를 르클레르"))
+                .andExpect(jsonPath("$.data.favoriteDriver.teamNameKo").value("페라리"));
+        mvc.perform(patch("/api/me").principal(() -> "viewer").contentType(MediaType.APPLICATION_JSON).content("{\"bio\":\"한국어 표시 확인\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.favoriteDriver.nameKo").value("샤를 르클레르"))
+                .andExpect(jsonPath("$.data.favoriteDriver.teamNameKo").value("페라리"));
+    }
+
 }

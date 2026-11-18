@@ -56,7 +56,7 @@ class ChatReadApiTests {
     void publicRoomListHasContractAndUsesConfiguredSeasonAndDatabaseWindows() throws Exception {
         mvc.perform(get("/api/chat-rooms"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.items[*].roomId").value(is(List.of("4", "2", "6", "1", "7", "3"))))
-                .andExpect(jsonPath("$.data.items[0].length()").value(11))
+                .andExpect(jsonPath("$.data.items[0].length()").value(12))
                 .andExpect(jsonPath("$.data.items[0].status").value("ARCHIVED"))
                 .andExpect(jsonPath("$.data.items[1].status").value("SCHEDULED"))
                 .andExpect(jsonPath("$.data.items[3].status").value("LIVE"))
@@ -90,7 +90,7 @@ class ChatReadApiTests {
     @CsvSource({"1,true", "2,false", "3,false", "4,false"})
     void detailCanSendReflectsMemberAndCurrentRoomState(String roomId, boolean expected) throws Exception {
         mvc.perform(get("/api/chat-rooms/" + roomId).principal(() -> "viewer"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.data.length()").value(12))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.length()").value(13))
                 .andExpect(jsonPath("$.data.canSendMessage").value(expected));
         mvc.perform(get("/api/chat-rooms/" + roomId)).andExpect(jsonPath("$.data.canSendMessage").value(false));
     }
@@ -360,4 +360,18 @@ class ChatReadApiTests {
                 jdbc.queryForList("SELECT id,room_id,stream_sequence,event_type,occurred_at,expires_at FROM stream_events ORDER BY id"),
                 jdbc.queryForList("SELECT payload FROM stream_events ORDER BY id", String.class));
     }
+
+    @Test void roomDetailAndFilteredListShareKoreanRaceNameAndExplicitNull() throws Exception {
+        mvc.perform(get("/api/chat-rooms/1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").value(org.hamcrest.Matchers.hasEntry("raceNameKo", null)));
+        jdbc.update("UPDATE races SET name_ko='라스베이거스 그랑프리' WHERE id=1");
+        mvc.perform(get("/api/chat-rooms/1"))
+                .andExpect(jsonPath("$.data.raceNameKo").value("라스베이거스 그랑프리"));
+        var page = service.rooms(Map.of("season", "2026", "size", "100"), null);
+        assertThat(page.items().stream().filter(room -> room.raceId().equals("1")).findFirst().orElseThrow().raceNameKo())
+                .isEqualTo("라스베이거스 그랑프리");
+        assertThat(page.items().stream().filter(room -> !room.raceId().equals("1")).allMatch(room -> room.raceNameKo() == null)).isTrue();
+    }
+
 }

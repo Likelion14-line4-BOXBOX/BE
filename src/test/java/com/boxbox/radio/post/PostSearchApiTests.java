@@ -321,4 +321,19 @@ class PostSearchApiTests {
 
     private static PostSearchFilter filter(Map<String,String> params) { return PostSearchFilter.from(10L,params); }
     private static LocalDateTime utc(Instant value) { return LocalDateTime.ofInstant(value,ZoneOffset.UTC); }
+
+    @Test void koreanTagNameIsConsistentInDetailListsAndSearchWithoutRewritingStoredNames() throws Exception {
+        jdbc.update("UPDATE teams SET name_ko='페라리' WHERE id=1");
+        jdbc.update("UPDATE board_tags SET name='Original tag',tag_group='TEAM' WHERE id=100");
+        mvc.perform(get("/api/posts/1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.tags[0].name").value("Original tag"))
+                .andExpect(jsonPath("$.data.tags[0].nameKo").value("페라리"));
+        mvc.perform(get("/api/posts?q=페라리"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].tags[0].nameKo").value("페라리"))
+                .andExpect(jsonPath("$.data.items[0].boardNameKo").value("페라리 게시판"));
+        assertThat(jdbc.queryForObject("SELECT name FROM board_tags WHERE id=100",String.class)).isEqualTo("Original tag");
+    }
+
 }

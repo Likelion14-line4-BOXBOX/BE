@@ -180,4 +180,28 @@ class BoardApiTests {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
     }
+
+    @Autowired private org.springframework.jdbc.core.JdbcTemplate koreanNamesJdbc;
+
+    @Test void koreanNamesFollowIdsWithoutChangingStoredBoardOrTagNames() throws Exception {
+        var boards = koreanNamesJdbc.queryForList("SELECT * FROM boards ORDER BY id");
+        var tags = koreanNamesJdbc.queryForList("SELECT * FROM board_tags ORDER BY id");
+        koreanNamesJdbc.update("UPDATE teams SET name_ko='페라리' WHERE id=1");
+        koreanNamesJdbc.update("UPDATE drivers SET name_ko='샤를 르클레르' WHERE id=11");
+        mvc.perform(get("/api/boards?teamId=1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].name").value("팀 A 게시판"))
+                .andExpect(jsonPath("$.data.items[0].nameKo").value("페라리 게시판"));
+        mvc.perform(get("/api/boards/10/tags"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].nameKo").value("페라리"))
+                .andExpect(jsonPath("$.data.items[1].nameKo").value("샤를 르클레르"))
+                .andExpect(jsonPath("$.data.items[2]").value(org.hamcrest.Matchers.hasEntry("nameKo", null)));
+        koreanNamesJdbc.update("UPDATE teams SET name_ko=NULL WHERE id=1");
+        mvc.perform(get("/api/boards?teamId=1"))
+                .andExpect(jsonPath("$.data.items[0]").value(org.hamcrest.Matchers.hasEntry("nameKo", null)));
+        org.assertj.core.api.Assertions.assertThat(koreanNamesJdbc.queryForList("SELECT * FROM boards ORDER BY id")).isEqualTo(boards);
+        org.assertj.core.api.Assertions.assertThat(koreanNamesJdbc.queryForList("SELECT * FROM board_tags ORDER BY id")).isEqualTo(tags);
+    }
+
 }

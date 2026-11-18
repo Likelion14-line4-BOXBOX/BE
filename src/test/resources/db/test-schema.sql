@@ -2,7 +2,7 @@
 CREATE TABLE IF NOT EXISTS teams (
     id BIGINT PRIMARY KEY,
     code VARCHAR(40) NOT NULL UNIQUE,
-    name VARCHAR(100) NOT NULL,
+    name VARCHAR(100) NOT NULL, name_ko VARCHAR(120),
     display_order SMALLINT NOT NULL,
     championship_rank SMALLINT,
     stats_season_year SMALLINT,
@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS teams (
 CREATE TABLE IF NOT EXISTS drivers (
     id BIGINT PRIMARY KEY,
     code VARCHAR(40) UNIQUE,
-    name VARCHAR(100) NOT NULL,
+    name VARCHAR(100) NOT NULL, name_ko VARCHAR(120),
     team_id BIGINT REFERENCES teams(id),
     car_number SMALLINT,
     championship_rank SMALLINT,
