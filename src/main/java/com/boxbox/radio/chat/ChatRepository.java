@@ -36,6 +36,14 @@ class ChatRepository {
         return jdbc.query(ROOMS + " WHERE c.id=?", (rs, row) -> room(rs), roomId).stream().findFirst().orElseThrow(ChatRepository::notFound);
     }
 
+    Optional<Room> featuredRoom(int season, Instant now) {
+        return jdbc.query(ROOMS + """
+                WHERE r.season_year=? AND c.status<>'ARCHIVED' AND c.closes_at>?
+                ORDER BY CASE WHEN c.opens_at<=? THEN 0 ELSE 1 END, c.opens_at, c.id
+                LIMIT 1
+                """, (rs, row) -> room(rs), season, utc(now), utc(now)).stream().findFirst();
+    }
+
     long maxRoomId() { return jdbc.queryForObject("SELECT COALESCE(MAX(id),0) FROM chat_rooms", Long.class); }
     long maxMessageId(long roomId) { return jdbc.queryForObject("SELECT COALESCE(MAX(id),0) FROM chat_messages WHERE room_id=?", Long.class, roomId); }
 

@@ -5,7 +5,6 @@ import com.boxbox.market.round.MarketRoundService;
 import com.boxbox.radio.chat.ChatService;
 import com.boxbox.radio.post.PostSummaryReader;
 import java.time.Instant;
-import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Value;
@@ -37,7 +36,7 @@ class HomeService {
         Long viewer = loginId == null ? null : repository.viewer(loginId);
         var race = repository.nextRace(season, now);
         var session = race == null ? null : repository.nextSession(race.raceId(), now);
-        var room = chatRoom();
+        var room = chatRoom(now);
         var round = rounds.current(now).round();
         var marketRound = round == null ? null : new HomeResponse.MarketRound(round.roundId(), round.raceId(),
                 round.season(), round.roundNumber(), round.raceName(), round.status(), round.openAt(), round.closeAt(),
@@ -56,13 +55,9 @@ class HomeService {
         return new HomeResponse(race, session, room, marketRound, featured, marketSummary);
     }
 
-    private HomeResponse.ChatRoom chatRoom() {
-        String seasonValue = Integer.toString(season);
-        var rooms = chats.rooms(Map.of("status", "LIVE", "size", "1", "season", seasonValue), null).items();
-        if (rooms.isEmpty()) {
-            rooms = chats.rooms(Map.of("status", "SCHEDULED", "size", "1", "season", seasonValue), null).items();
-        }
-        return rooms.stream().findFirst().map(room -> new HomeResponse.ChatRoom(room.roomId(), room.raceId(),
-                room.raceName(), room.raceNameEn(), room.status(), room.onlineCount(), room.opensAt(), room.closesAt())).orElse(null);
+    private HomeResponse.ChatRoom chatRoom(Instant now) {
+        var room = chats.featuredRoom(season, now);
+        return room == null ? null : new HomeResponse.ChatRoom(room.roomId(), room.raceId(),
+                room.raceName(), room.raceNameEn(), room.status(), room.onlineCount(), room.opensAt(), room.closesAt());
     }
 }
