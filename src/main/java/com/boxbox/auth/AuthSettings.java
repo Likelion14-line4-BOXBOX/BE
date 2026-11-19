@@ -18,6 +18,7 @@ class AuthSettings {
     final int loginIpLimit;
     final int loginAccountLimit;
     final int refreshLimit;
+    final String demoLoginId;
 
     AuthSettings(Environment env) {
         origins = Arrays.stream(env.getProperty("boxbox.auth.allowed-origins", "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000")
@@ -37,6 +38,9 @@ class AuthSettings {
             throw new IllegalArgumentException("refresh 유효 기간은 0초 초과 90일 이하여야 합니다.");
         initialCoins = env.getProperty("boxbox.auth.initial-coins", Long.class, 1_000_000L);
         if (initialCoins <= 0) throw new IllegalArgumentException("최초 지급액은 양수여야 합니다.");
+        demoLoginId = env.getProperty("boxbox.auth.demo-login-id", "boxbox5").trim();
+        if (!demoLoginId.matches("[a-z0-9_]{4,20}"))
+            throw new IllegalArgumentException("체험 계정 아이디를 확인해 주세요.");
         signupLimit = positive(env, "signup", 10);
         loginIpLimit = positive(env, "login-ip", 30);
         loginAccountLimit = positive(env, "login-account", 10);

@@ -79,6 +79,21 @@ class AuthService {
         });
     }
 
+    Tokens demoLogin() {
+        return transaction.execute(status -> {
+            var candidate = users.byLogin(settings.demoLoginId).orElseThrow(AuthService::demoUnavailable);
+            var current = users.byId(candidate.id(), true).orElseThrow(AuthService::demoUnavailable);
+            if (!current.active()) throw demoUnavailable();
+            Instant now = clock.instant();
+            return issue(current.id(), UUID.randomUUID().toString(), now.plus(settings.refreshLifetime), now);
+        });
+    }
+
+    private static ApiException demoUnavailable() {
+        return new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "DEMO_ACCOUNT_UNAVAILABLE",
+                "체험 계정을 준비 중입니다. 잠시 후 다시 시도해 주세요.");
+    }
+
     Tokens refresh(String raw) {
         if (!AuthTokens.validRefresh(raw)) throw new RefreshFailure("REFRESH_TOKEN_INVALID");
         byte[] hash = AuthTokens.hash(raw);
