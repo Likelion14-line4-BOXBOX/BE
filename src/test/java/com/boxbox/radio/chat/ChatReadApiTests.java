@@ -372,6 +372,42 @@ class ChatReadApiTests {
                 jdbc.queryForList("SELECT payload FROM stream_events ORDER BY id", String.class));
     }
 
+    @Test
+    void homeFeaturedRoomUsesNearestUpcomingRoomInsteadOfDescendingListHead() {
+        Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        jdbc.update("UPDATE chat_rooms SET status='ARCHIVED' WHERE id IN (1,2,3,4,6,7)");
+        jdbc.update("UPDATE chat_rooms SET status='SCHEDULED' WHERE id IN (1,2,6)");
+        window(1, now.plusSeconds(3600), now.plusSeconds(7200));
+        window(2, now.plusSeconds(86400), now.plusSeconds(90000));
+        window(6, now.plusSeconds(172800), now.plusSeconds(180000));
+        var before = snapshot();
+
+        assertThat(service.rooms(Map.of("status", "SCHEDULED", "size", "1"), null).items().getFirst().roomId()).isEqualTo("6");
+        var selected = service.featuredRoom(2026, now);
+        assertThat(selected.roomId()).isEqualTo("1");
+        assertThat(selected.status()).isEqualTo("SCHEDULED");
+        assertThat(snapshot()).usingRecursiveComparison().isEqualTo(before);
+    }
+
+    @Test
+    void homeFeaturedRoomPrefersLiveAndUsesExactOpenAndCloseBoundaries() {
+        Instant now = Instant.parse("2026-11-19T00:00:00Z");
+        jdbc.update("UPDATE chat_rooms SET status='ARCHIVED' WHERE id IN (1,2,3,4,6,7)");
+        jdbc.update("UPDATE chat_rooms SET status='SCHEDULED' WHERE id IN (1,2,6)");
+        window(1, now.minusSeconds(3600), now);
+        window(2, now, now.plusSeconds(3600));
+        window(6, now.plusSeconds(60), now.plusSeconds(7200));
+        var selected = service.featuredRoom(2026, now);
+        assertThat(selected.roomId()).isEqualTo("2");
+        assertThat(selected.status()).isEqualTo("LIVE");
+
+        jdbc.update("UPDATE chat_rooms SET status='ARCHIVED' WHERE id=2");
+        assertThat(service.featuredRoom(2026, now).roomId()).isEqualTo("6");
+        jdbc.update("UPDATE chat_rooms SET status='ARCHIVED' WHERE id=6");
+        assertThat(service.featuredRoom(2026, now)).isNull();
+        assertThat(service.featuredRoom(2024, now)).isNull();
+    }
+
     @Test void roomDetailAndFilteredListShareKoreanRaceNameAndExplicitNull() throws Exception {
         String original = jdbc.queryForObject("SELECT name FROM races WHERE id=1",String.class);
         mvc.perform(get("/api/chat-rooms/1"))

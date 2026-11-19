@@ -11,7 +11,7 @@ UPDATE teams SET name_ko = CASE code
   WHEN 'audi' THEN '아우디'
   WHEN 'cadillac' THEN '캐딜락'
   WHEN 'ferrari' THEN '페라리'
-  WHEN 'haas_f1_team' THEN '하스 F1 팀'
+  WHEN 'haas_f1_team' THEN '하스'
   WHEN 'mclaren' THEN '맥라렌'
   WHEN 'mercedes' THEN '메르세데스'
   WHEN 'racing_bulls' THEN '레이싱 불스'
@@ -19,6 +19,9 @@ UPDATE teams SET name_ko = CASE code
   WHEN 'williams' THEN '윌리엄스'
   ELSE name_ko END
 WHERE name_ko IS NULL AND code IN ('alpine','aston_martin','audi','cadillac','ferrari','haas_f1_team','mclaren','mercedes','racing_bulls','red_bull_racing','williams');
+
+-- 2026-11-19 사용자 표기 정정. 기존 영문명·코드와 별도 입력한 다른 한국어 표기는 보존한다.
+UPDATE teams SET name_ko='하스' WHERE code='haas_f1_team' AND name_ko='하스 F1 팀';
 
 UPDATE drivers SET name_ko = CASE code
   WHEN 'ALB' THEN '알렉산더 알본'

@@ -47,6 +47,12 @@ public class ChatService {
         return new ChatResponses.RoomPage(rows.stream().map(room -> summary(room, anchor, counts.get(room.id()))).toList(), next, hasNext);
     }
 
+    public ChatResponses.Room featuredRoom(int season, Instant now) {
+        return repository.featuredRoom(season, now)
+                .map(room -> summary(room, now, presence.counts(List.of(room.id())).get(room.id())))
+                .orElse(null);
+    }
+
     public ChatResponses.RoomDetail detail(long roomId, Map<String, String> params, String loginId) {
         var viewer = viewer(loginId);
         if (!params.isEmpty()) throw ApiException.invalidRequest("채팅방 상세에는 조회 조건을 지정하지 않습니다.");
