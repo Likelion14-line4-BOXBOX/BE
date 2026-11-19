@@ -37,6 +37,14 @@ class AuthController {
         return issued(service.login(input));
     }
 
+    @PostMapping("/demo")
+    ResponseEntity<ApiResponse<AuthService.TokenResponse>> demo(
+            HttpServletRequest request, @RequestBody(required = false) String body) {
+        noBody(request, body);
+        rate.acquire("demo-ip", request.getRemoteAddr(), settings.loginIpLimit);
+        return issued(service.demoLogin());
+    }
+
     @PostMapping("/refresh")
     ResponseEntity<ApiResponse<AuthService.TokenResponse>> refresh(HttpServletRequest request, @RequestBody(required = false) String body) {
         noBody(request, body);

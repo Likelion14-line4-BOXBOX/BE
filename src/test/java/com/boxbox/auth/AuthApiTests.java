@@ -65,6 +65,48 @@ class AuthApiTests {
     }
     @BeforeEach void nextWindow() { clock.advance(Duration.ofMinutes(2)); }
 
+    @Test void demoLoginSharesAccountWithIndependentSessionsAndPreservesWallet() throws Exception {
+        signup("boxbox5", "1234abcd", "공용체험", 201);
+        jdbc.update("UPDATE users SET coin_balance=997600 WHERE login_id='boxbox5'");
+        var first = mvc.perform(post("/api/auth/demo"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.data.tokenType").value("Bearer"))
+                .andReturn();
+        var second = mvc.perform(post("/api/auth/demo")).andExpect(status().isOk()).andReturn();
+        assertThat(tokens.verify(access(first))).isEqualTo(tokens.verify(access(second)));
+        assertThat(count("users")).isEqualTo(1);
+        assertThat(count("coin_ledger")).isEqualTo(1);
+        assertThat(count("auth_sessions")).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT coin_balance FROM users", Long.class)).isEqualTo(997600L);
+        mvc.perform(get("/api/me").header("Authorization", "Bearer " + access(first)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.nickname").value("공용체험"));
+        mvc.perform(post("/api/auth/logout").cookie(refreshCookie(second)).header("Origin", ORIGIN))
+                .andExpect(status().isNoContent());
+        refresh(refreshCookie(first), 200);
+        refresh(refreshCookie(second), 401);
+    }
+
+    @Test void demoLoginRequiresExistingActiveConfiguredAccount() throws Exception {
+        mvc.perform(post("/api/auth/demo")).andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.error.code").value("DEMO_ACCOUNT_UNAVAILABLE"));
+        signup("ordinary", "1234abcd", "일반회원", 201);
+        mvc.perform(post("/api/auth/demo")).andExpect(status().isServiceUnavailable());
+        signup("boxbox5", "1234abcd", "공용체험", 201);
+        jdbc.update("UPDATE users SET status='SUSPENDED' WHERE login_id='boxbox5'");
+        mvc.perform(post("/api/auth/demo")).andExpect(status().isServiceUnavailable());
+        jdbc.update("UPDATE users SET status='ACTIVE',deleted_at=CURRENT_TIMESTAMP WHERE login_id='boxbox5'");
+        mvc.perform(post("/api/auth/demo")).andExpect(status().isServiceUnavailable());
+        assertThat(count("auth_sessions")).isZero();
+    }
+
+    @Test void demoLoginRejectsBodyAndQueryParameters() throws Exception {
+        mvc.perform(post("/api/auth/demo?loginId=ordinary")).andExpect(status().isBadRequest());
+        mvc.perform(post("/api/auth/demo").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"loginId\":\"ordinary\"}")).andExpect(status().isBadRequest());
+        assertThat(count("auth_sessions")).isZero();
+    }
+
     @Test void signupCreatesOneUserBalanceAndLedgerWithoutLoggingIn() throws Exception {
         var result = signup("  BoxBox_1  ", "1234abcd", "  새회원  ", 201);
         var data = json.readTree(result.getResponse().getContentAsString()).get("data");
